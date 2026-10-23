@@ -15,12 +15,19 @@ try{
  const obj=new T.FBXLoader().parse(buf.buffer,'');
  L('parsed, anims '+(obj.animations||[]).length+' '+(obj.animations[0]&&obj.animations[0].duration));
  let meshes=0; obj.traverse(o=>{if(o.isMesh)meshes++}); L('meshes '+meshes);
- const box=new T.Box3().setFromObject(obj), sz=box.getSize(new T.Vector3()); L('size '+sz.x.toFixed(1)+' '+sz.y.toFixed(1)+' '+sz.z.toFixed(1));
  const r=new T.WebGLRenderer({canvas:document.getElementById('c'),alpha:true}); const sc=new T.Scene();
- sc.add(new T.AmbientLight(0xffffff,1)); obj.scale.multiplyScalar(2.35/sz.y); sc.add(obj);
+ sc.add(new T.AmbientLight(0xffffff,1));
+ const mx=new T.AnimationMixer(obj), clip=obj.animations[0];
+ clip.tracks.forEach(tr=>{ if(/hips\.position$/i.test(tr.name)){ const v=tr.values; for(let i=3;i<v.length;i+=3){ v[i]=v[0]; v[i+2]=v[2]; } } });
+ mx.clipAction(clip).play(); mx.setTime(0);
+ const holder=new T.Group(); holder.add(obj); sc.add(holder);
+ function fit(){ obj.updateMatrixWorld(true); const bb=new T.Box3(); const v=new T.Vector3();
+   obj.traverse(o=>{ if(o.isBone){ o.getWorldPosition(v); bb.expandByPoint(v); } });
+   const h=bb.max.y-bb.min.y; L('bone box h '+h.toFixed(1)+' w '+(bb.max.x-bb.min.x).toFixed(1)); return bb; }
+ let bb=fit(); const h=(bb.max.y-bb.min.y)*1.12; const k=2.35/h; holder.scale.setScalar(k);
+ holder.position.set(-(bb.min.x+bb.max.x)/2*k, -bb.min.y*k, -(bb.min.z+bb.max.z)/2*k);
  const cam=new T.OrthographicCamera(-1.45,1.45,2.75,-0.15,.1,20); cam.position.set(0,0,6);
- const mx=new T.AnimationMixer(obj); if(obj.animations[0]) mx.clipAction(obj.animations[0]).play();
- let t=0; (function f(){ t+=.016; mx.setTime(t); r.render(sc,cam); requestAnimationFrame(f); })();
+ let t=0; (function f(){ t+=.016; mx.setTime(t%clip.duration); r.render(sc,cam); requestAnimationFrame(f); })();
  L('OK');
 }catch(e){ L('ERROR: '+(e&&e.stack||e)); }
 </script>
