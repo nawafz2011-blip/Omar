@@ -1,0 +1,911 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ورشة الخرائط</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Lalezar&display=swap">
+<style>
+/* Layout: one-screen workshop — tool panel on the right (RTL), live 3D diorama filling the rest; stacks on phones. */
+:root{
+  --bg:#141a26; --panel:#1c2433; --panel-2:#253047; --line:#34415c;
+  --text:#eef2f8; --muted:#9ba7be; --accent:#ffb547; --accent-ink:#2b1b00;
+  --danger:#ff6b6b; --sky:#a8d8f0; --ok:#5ee0a0;
+  --display:"Lalezar","IBM Plex Sans Arabic",system-ui,sans-serif;
+  --body:"IBM Plex Sans Arabic",system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--body);overflow:hidden}
+*{box-sizing:border-box}
+a{color:var(--accent)}
+.app{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,transparent 50%,rgba(0,0,0,.18) 50%),var(--accent);box-shadow:inset 0 -6px 0 rgba(0,0,0,.18);flex:none}
+h1{font-family:var(--display);font-weight:400;font-size:26px;line-height:1;margin:0;letter-spacing:0}
+.brand p{margin:3px 0 0;color:var(--muted);font-size:13px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+button{font:inherit;font-size:14px;font-weight:500;color:var(--text);background:var(--panel-2);border:1px solid var(--line);
+  border-radius:10px;padding:8px 14px;cursor:pointer;transition:background .15s,border-color .15s,transform .1s}
+button:hover{border-color:#4b5b7e;background:#2c3853}
+button:active{transform:translateY(1px)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.primary:hover{background:#ffc46b}
+button.ghost{background:transparent}
+button.warn{border-color:var(--danger);color:var(--danger)}
+.main{display:grid;grid-template-columns:300px minmax(0,1fr);gap:12px;min-height:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:16px;min-height:0}
+.tools{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:var(--bg);padding:4px;border-radius:11px}
+.tools button{border:none;background:transparent;padding:8px 2px;border-radius:8px}
+.tools button[aria-checked="true"]{background:var(--panel-2);box-shadow:inset 0 0 0 1px var(--line);color:var(--accent)}
+.tools button[data-tool="erase"][aria-checked="true"]{color:var(--danger)}
+.group h2{font-family:var(--display);font-weight:400;font-size:18px;margin:0 0 8px;color:var(--muted);letter-spacing:0;display:flex;justify-content:space-between;align-items:baseline}
+.group h2 button{font-family:var(--body);font-size:12px;padding:2px 8px;background:transparent;border:none;color:var(--accent)}
+.mine{background:var(--bg);border-radius:12px;padding:10px}
+.items{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:6px}
+.item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 2px 6px;border-radius:10px;background:var(--panel-2);border:1px solid transparent;min-width:0}
+.item img{width:100%;max-width:64px;aspect-ratio:1;display:block}
+.item span{font-size:12px;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item[aria-pressed="true"]{border-color:var(--accent);background:#33395a}
+.item[aria-pressed="true"] span{color:var(--text)}
+.item.add{border:1px dashed #56678c;background:transparent;justify-content:center;color:var(--accent)}
+.item.add b{font-size:26px;line-height:1.3;font-weight:400}
+.item.add span{color:var(--accent)}
+.empty{font-size:12.5px;color:var(--muted);margin:8px 0 0;line-height:1.6}
+.cset{margin-top:10px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.cset p{margin:0;font-size:12.5px;color:var(--muted)}
+.roles{display:grid;grid-template-columns:repeat(2,1fr);gap:4px}
+.roles button{font-size:12.5px;padding:6px 4px}
+.roles button[aria-checked="true"]{border-color:var(--accent);color:var(--accent)}
+.stats{display:flex;flex-wrap:wrap;gap:6px}
+.pill{font-size:12px;padding:4px 9px;border-radius:99px;background:var(--bg);color:var(--muted);font-variant-numeric:tabular-nums}
+.pill.bad{color:var(--danger)}
+.help{margin:0;font-size:12.5px;line-height:1.7;color:var(--muted)}
+.help b{color:var(--text);font-weight:500}
+.stage{position:relative;border-radius:14px;overflow:hidden;min-height:0;background:var(--sky)}
+.stage canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+.stage.drop::after{content:"أفلت الملف هنا";position:absolute;inset:10px;border:3px dashed var(--accent);border-radius:12px;display:grid;place-items:center;font-family:var(--display);font-size:30px;color:var(--accent-ink);background:rgba(255,181,71,.35);pointer-events:none}
+.chip{position:absolute;top:10px;right:10px;background:rgba(20,26,38,.82);color:var(--text);font-size:13px;padding:6px 12px;border-radius:99px;pointer-events:none;max-width:calc(100% - 20px)}
+.toast{position:absolute;top:50px;right:10px;background:var(--accent);color:var(--accent-ink);font-size:13.5px;font-weight:500;padding:8px 14px;border-radius:10px;max-width:calc(100% - 20px);z-index:4}
+.toast.bad{background:var(--danger);color:#2a0000}
+.viewbtns{position:absolute;bottom:10px;left:10px;display:flex;gap:6px}
+.viewbtns button{width:38px;height:38px;padding:0;font-size:18px;background:rgba(20,26,38,.82);border-color:transparent}
+.hud{position:absolute;top:10px;right:10px;left:10px;display:flex;justify-content:space-between;align-items:center;pointer-events:none}
+.hearts{font-size:28px;letter-spacing:2px;color:#ff4d6d;text-shadow:0 2px 0 rgba(0,0,0,.25)}
+.hearts .lost{color:rgba(20,26,38,.35)}
+.loot{background:rgba(20,26,38,.82);padding:6px 12px;border-radius:99px;font-size:14px;font-variant-numeric:tabular-nums}
+.loot b{color:var(--accent)}
+.playhint{position:absolute;bottom:10px;right:10px;background:rgba(20,26,38,.82);font-size:13px;padding:6px 12px;border-radius:99px;pointer-events:none}
+.dpad{position:absolute;bottom:14px;left:14px;display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(3,52px);gap:4px;direction:ltr}
+.dpad button{background:rgba(20,26,38,.7);border-color:transparent;font-size:20px;padding:0;touch-action:none;user-select:none;-webkit-user-select:none}
+.dpad [data-k="up"]{grid-column:2;grid-row:1}.dpad [data-k="left"]{grid-column:1;grid-row:2}
+.dpad [data-k="right"]{grid-column:3;grid-row:2}.dpad [data-k="down"]{grid-column:2;grid-row:3}
+@media (pointer:fine){.dpad{display:none}}
+.overlay{position:absolute;inset:0;display:grid;place-items:center;background:rgba(10,14,22,.6);padding:16px;z-index:5}
+.overlay.modal{position:fixed;overflow:auto}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;width:min(360px,100%);display:flex;flex-direction:column;gap:12px;text-align:center}
+.card.wide{width:min(580px,100%);text-align:right;max-height:100%;overflow:auto}
+.card h2{font-family:var(--display);font-weight:400;font-size:30px;margin:0;letter-spacing:0}
+.card h3{font-family:var(--display);font-weight:400;font-size:21px;margin:6px 0 0;color:var(--accent);letter-spacing:0}
+.card p{margin:0;color:var(--muted);line-height:1.7;font-size:14px}
+.card code{background:var(--bg);padding:1px 6px;border-radius:5px;color:var(--text)}
+.steps{margin:0;padding-right:22px;display:flex;flex-direction:column;gap:6px;color:var(--text);font-size:14px;line-height:1.7}
+.steps li::marker{color:var(--accent);font-weight:600}
+.steps small{color:var(--muted);font-size:12.5px}
+.row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.card.wide .row{justify-content:flex-start}
+textarea{width:100%;height:150px;resize:vertical;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font:12px/1.5 ui-monospace,Menlo,monospace}
+.msg{min-height:1.2em;color:var(--accent)!important}
+.app.playing .main{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+@media (max-width:760px){
+  .main{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1.3fr) minmax(0,1fr)}
+  .stage{order:-1}
+  .brand p{display:none}
+  h1{font-size:22px}
+  button{padding:7px 11px;font-size:13px}
+}
+</style>
+</head>
+<body>
+
+<div class="app" id="app" dir="rtl">
+  <header class="bar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <div><h1>ورشة الخرائط</h1><p>صمّم مرحلتك بالضغط وجرّبها على طول</p></div>
+    </div>
+    <div class="actions">
+      <button id="btnPlay" class="primary">جرّب العب</button>
+      <button id="btnGuide">الدليل</button>
+      <button id="btnSave">حفظ ومشاركة</button>
+      <button id="btnSample">خريطة مثال</button>
+      <button id="btnClear" class="ghost">مسح الكل</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <aside class="panel" id="panel">
+      <div class="tools" role="radiogroup" aria-label="الأداة">
+        <button id="toolPlace" data-tool="place" role="radio" aria-checked="true">حط</button>
+        <button id="toolRotate" data-tool="rotate" role="radio" aria-checked="false">دوّر</button>
+        <button id="toolSize" data-tool="size" role="radio" aria-checked="false">الحجم</button>
+        <button id="toolErase" data-tool="erase" role="radio" aria-checked="false">امسح</button>
+      </div>
+      <div id="palette"></div>
+      <div class="stats" id="stats"></div>
+      <p class="help"><b>الزر الأيسر:</b> حط أو ارسم (اسحب لرسم الأرضيات)<br><b>الزر الأيمن أو إصبعين:</b> لف الكاميرا<br><b>عجلة الماوس:</b> قرّب وبعّد</p>
+    </aside>
+
+    <section class="stage" id="stage">
+      <canvas id="cv"></canvas>
+      <div class="chip" id="hint"></div>
+      <div class="toast" id="toast" hidden></div>
+      <div class="viewbtns" id="viewbtns">
+        <button id="vLeft" title="لف يسار" aria-label="لف الكاميرا يسار">↺</button>
+        <button id="vRight" title="لف يمين" aria-label="لف الكاميرا يمين">↻</button>
+        <button id="vIn" title="قرّب" aria-label="قرّب">+</button>
+        <button id="vOut" title="بعّد" aria-label="بعّد">−</button>
+      </div>
+      <div class="hud" id="hud" hidden><div class="hearts" id="hearts"></div><div class="loot" id="loot"></div></div>
+      <div class="playhint" id="playhint" hidden>الأسهم أو WASD للحركة · اجمع الكنوز وادخل المخرج</div>
+      <div class="dpad" id="dpad" hidden>
+        <button data-k="up" aria-label="فوق">▲</button>
+        <button data-k="left" aria-label="يسار">◀</button>
+        <button data-k="right" aria-label="يمين">▶</button>
+        <button data-k="down" aria-label="تحت">▼</button>
+      </div>
+      <div class="overlay" id="endBox" hidden>
+        <div class="card">
+          <h2 id="endTitle"></h2>
+          <p id="endText"></p>
+          <div class="row"><button id="btnAgain" class="primary">العب مرة ثانية</button><button id="btnBack">رجوع للتصميم</button></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <input type="file" id="fileIn" accept=".glb,.gltf" multiple hidden>
+
+  <div class="overlay modal" id="guideBox" hidden>
+    <div class="card wide">
+      <h2>أهلاً في ورشتك</h2>
+      <h3>التصميم في ثلاث خطوات</h3>
+      <ol class="steps">
+        <li>اختر شي من القائمة اللي على اليمين، مثل شجرة أو بيت أو وحش.</li>
+        <li>اضغط على الأرض عشان تحطه. الأرضيات (عشب، طريق، ماء) تقدر ترسمها بالسحب.</li>
+        <li>اضغط <b>جرّب العب</b> وامشِ بالأسهم داخل مرحلتك.</li>
+      </ol>
+      <h3>تجيب أشياء من برا (مجاناً)</h3>
+      <ol class="steps">
+        <li>افتح موقع <a href="https://poly.pizza" target="_blank" rel="noopener">poly.pizza</a> <small>(أسهل موقع، فيه آلاف الأشياء)</small></li>
+        <li>اكتب في البحث بالإنجليزي اللي تبيه، مثل: <code>tree</code> <code>house</code> <code>car</code> <code>monster</code> <code>dragon</code></li>
+        <li>افتح الشي اللي يعجبك، واضغط <b>Download</b> واختر <b>GLB</b>.</li>
+        <li>ارجع هنا واضغط <b>+ أضف</b> تحت «أشيائي من برا»، واختر الملف. أو اسحب الملف وأفلته فوق الماب.</li>
+        <li>يطلع في القائمة وتحطه مثل أي شي. ولو كان وحش، اختر له <b>وحش</b> عشان يطاردك وأنت تلعب.</li>
+      </ol>
+      <h3>شخصيات ووحوش تتحرك (أنميشن جاهز)</h3>
+      <ol class="steps">
+        <li>في <a href="https://poly.pizza" target="_blank" rel="noopener">poly.pizza</a> ابحث عن <code>animated</code> أو <code>quaternius</code>. هذي موديلات فيها مشي ووقوف جاهز.</li>
+        <li>أو ادخل <a href="https://quaternius.com" target="_blank" rel="noopener">quaternius.com</a> وحمّل باك مثل <b>Ultimate Monsters</b> أو <b>Animated Characters</b>، وكل شخصية فيها مشي وجري وهجوم.</li>
+        <li>بعد ما تضيفها، اختر لها <b>اللاعب (أنت)</b> عشان تلعب فيها، أو <b>وحش</b> عشان تطاردك. الورشة تشغّل المشي لحاله.</li>
+      </ol>
+      <p>مواقع ثانية فيها باكات كاملة بنفس الستايل: <a href="https://kenney.nl/assets" target="_blank" rel="noopener">kenney.nl</a> و <a href="https://quaternius.com" target="_blank" rel="noopener">quaternius.com</a> (تنزل ملف مضغوط، تفتحه، وتدور على الملفات اللي تنتهي بـ <code>.glb</code>).</p>
+      <p>الأشياء اللي تضيفها تنحفظ في هذا المتصفح. عشان أشتغل عليها أنا، ارفع ملفات الـ GLB في GitHub داخل مجلد اسمه <code>models</code> مع كود الخريطة.</p>
+      <div class="row"><button id="btnGuideOk" class="primary">فهمت، يلا نبدأ</button><button id="btnGuideAdd">أضف شي من جهازي</button></div>
+    </div>
+  </div>
+
+  <div class="overlay modal" id="saveBox" hidden>
+    <div class="card wide">
+      <h2>حفظ ومشاركة</h2>
+      <p>هذا كود خريطتك. انسخه وارسله لي في المحادثة، أو احفظه في GitHub في ملف اسمه <code>map.json</code>. وتقدر تلصق هنا كود خريطة ثانية وتحمّلها.</p>
+      <textarea id="mapText" dir="ltr" spellcheck="false"></textarea>
+      <div class="row">
+        <button id="btnCopy" class="primary">انسخ الكود</button>
+        <button id="btnLoad">حمّل الكود اللي في المربع</button>
+        <button id="btnCloseSave" class="ghost">إغلاق</button>
+      </div>
+      <p class="msg" id="saveMsg"></p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
+<script>
+(function(){
+const N = 20, HALF = N / 2;
+const STORE = 'warsha-map-v1', SEEN = 'warsha-guide-seen';
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const SIZES = [1, 1.5, 2, 3, 0.6];
+const SIZE_NAMES = ['عادي','أكبر','كبير','ضخم','صغير'];
+
+const ITEMS = {
+  grass:{name:'عشب',kind:'tile',color:0x6fb24f},
+  sand:{name:'رمل',kind:'tile',color:0xe3c98b},
+  path:{name:'طريق',kind:'tile',color:0xb98b5e},
+  water:{name:'ماء',kind:'tile',color:0x3d8fd1},
+  tree:{name:'شجرة',kind:'obj'}, pine:{name:'صنوبر',kind:'obj'}, bush:{name:'شجيرة',kind:'obj'}, rock:{name:'صخرة',kind:'obj'},
+  house:{name:'بيت',kind:'obj'}, wall:{name:'جدار',kind:'obj'}, fence:{name:'سور',kind:'obj'},
+  start:{name:'البداية',kind:'obj'}, exit:{name:'المخرج',kind:'obj'}, monster:{name:'وحش',kind:'obj'}, chest:{name:'كنز',kind:'obj'}
+};
+const GROUPS = [
+  ['الأرضيات',['grass','sand','path','water']],
+  ['الطبيعة',['tree','pine','bush','rock']],
+  ['البناء',['house','wall','fence']],
+  ['اللعب',['start','exit','monster','chest']]
+];
+const BLOCK = new Set(['tree','pine','rock','house','wall','fence']);
+const ROLES = {player:'اللاعب (أنت)', monster:'وحش', block:'يسد الطريق', deco:'زينة (تمشي فوقه)', chest:'كنز'};
+const FIXES = [[0,0],[-Math.PI/2,0],[Math.PI/2,0],[0,Math.PI/2],[0,-Math.PI/2],[Math.PI,0]];
+const CUSTOM = {}; // id -> {name, role, proto, anims}
+const isCustom = t => t && t.indexOf('c:')===0;
+function roleOf(t){ if(isCustom(t)) return CUSTOM[t] ? CUSTOM[t].role : 'deco';
+  if(t==='monster'||t==='chest'||t==='exit'||t==='start') return t; return BLOCK.has(t)?'block':'deco'; }
+
+/* ---------- 3D parts ---------- */
+const matCache = {};
+function mat(color, opts){
+  const k = color + '|' + (opts ? JSON.stringify(opts) : '');
+  if(!matCache[k]){ const o=Object.assign({roughness:.85, flatShading:true}, opts||{}); o.color=new THREE.Color(color).convertSRGBToLinear(); if(o.emissive!=null) o.emissive=new THREE.Color(o.emissive).convertSRGBToLinear(); matCache[k]=new THREE.MeshStandardMaterial(o); }
+  return matCache[k];
+}
+function part(geo, color, x, y, z, opts){
+  const m = new THREE.Mesh(geo, mat(color, opts));
+  m.position.set(x||0, y||0, z||0); m.castShadow = true; m.receiveShadow = true; return m;
+}
+const Box=(w,h,d)=>new THREE.BoxGeometry(w,h,d);
+const Cyl=(a,b,h,s)=>new THREE.CylinderGeometry(a,b,h,s);
+const Cone=(r,h,s)=>new THREE.ConeGeometry(r,h,s);
+const Ico=(r)=>new THREE.IcosahedronGeometry(r,0);
+const Sph=(r)=>new THREE.SphereGeometry(r,12,10);
+
+const B = {
+  tree(){ const g=new THREE.Group();
+    g.add(part(Cyl(.08,.12,.5,6),0x7a4f2c,0,.25,0)); g.add(part(Ico(.4),0x3f9a3a,0,.78,0)); g.add(part(Ico(.26),0x52b347,.12,1.05,.05)); return g; },
+  pine(){ const g=new THREE.Group();
+    g.add(part(Cyl(.07,.1,.4,6),0x6e4526,0,.2,0)); g.add(part(Cone(.42,.6,7),0x2f7d4a,0,.55,0));
+    g.add(part(Cone(.32,.5,7),0x358a52,0,.88,0)); g.add(part(Cone(.2,.4,7),0x3d9a5c,0,1.15,0)); return g; },
+  bush(){ const g=new THREE.Group();
+    g.add(part(Ico(.28),0x4caa45,-.1,.2,0)); g.add(part(Ico(.22),0x5bbd4f,.15,.17,.08)); g.add(part(Ico(.18),0x44993e,0,.16,-.17)); return g; },
+  rock(){ const g=new THREE.Group();
+    const a=part(new THREE.DodecahedronGeometry(.34,0),0x8d9097,0,.2,0); a.scale.set(1,.72,1); a.rotation.y=.4; g.add(a);
+    g.add(part(new THREE.DodecahedronGeometry(.15,0),0x7b7e85,.26,.1,.22)); return g; },
+  house(){ const g=new THREE.Group();
+    g.add(part(Box(.82,.6,.82),0xf1e3c6,0,.3,0));
+    const roof=part(Cone(.68,.46,4),0xc4513b,0,.83,0); roof.rotation.y=Math.PI/4; g.add(roof);
+    g.add(part(Box(.2,.32,.03),0x6b4428,0,.16,.42));
+    g.add(part(Box(.15,.14,.03),0x9fd3ef,-.25,.38,.42)); g.add(part(Box(.15,.14,.03),0x9fd3ef,.25,.38,.42));
+    g.add(part(Box(.1,.25,.1),0x8a5a44,.2,.98,-.15)); return g; },
+  wall(){ const g=new THREE.Group(); g.add(part(Box(1,.9,1),0x9a9188,0,.45,0)); g.add(part(Box(1.04,.1,1.04),0x7d756d,0,.95,0)); return g; },
+  fence(){ const g=new THREE.Group();
+    for(const x of [-.42,0,.42]) g.add(part(Box(.09,.55,.09),0x9c6b3f,x,.275,0));
+    g.add(part(Box(1,.07,.05),0xb07c4a,0,.22,0)); g.add(part(Box(1,.07,.05),0xb07c4a,0,.42,0)); return g; },
+  start(){ const g=new THREE.Group();
+    g.add(part(Cyl(.42,.42,.05,24),0x3a7bd5,0,.025,0)); g.add(part(Cyl(.025,.025,.9,6),0xe5e7eb,.25,.45,0)); g.add(part(Box(.32,.2,.02),0x3a7bd5,.08,.78,0)); return g; },
+  exit(){ const g=new THREE.Group();
+    g.add(part(Cyl(.3,.38,.08,8),0x6b7280,0,.04,0));
+    const ring=part(new THREE.TorusGeometry(.36,.07,8,24),0x2dd4bf,0,.5,0,{emissive:0x0f766e});
+    const inner=new THREE.Mesh(new THREE.CircleGeometry(.33,24),new THREE.MeshStandardMaterial({color:0x99f6e4,emissive:0x14b8a6,transparent:true,opacity:.55,side:THREE.DoubleSide}));
+    ring.add(inner); g.add(ring); g.userData.spin=ring; return g; },
+  monster(){ const g=new THREE.Group(); const body=new THREE.Group();
+    body.add(part(Sph(.32),0x8e3fc4,0,.4,0));
+    for(const s of [-1,1]){
+      body.add(part(Sph(.09),0xffffff,s*.12,.5,.26));
+      body.add(part(new THREE.SphereGeometry(.045,8,6),0x111111,s*.12,.5,.34));
+      const h=part(Cone(.05,.18,6),0xf2e6c8,s*.17,.74,0); h.rotation.z=-s*.35; body.add(h);
+      body.add(part(Sph(.09),0x6b2d96,s*.15,.08,.05));
+    }
+    body.add(part(Box(.16,.03,.02),0x2a0a3a,0,.32,.31));
+    g.add(body); g.userData.bob=body; return g; },
+  chest(){ const g=new THREE.Group();
+    g.add(part(Box(.5,.3,.36),0x8a5528,0,.15,0)); g.add(part(Box(.52,.12,.38),0x9f6430,0,.36,0));
+    g.add(part(Box(.06,.44,.4),0xf2c14e,0,.22,0,{emissive:0x5a3d00})); g.add(part(Box(.08,.08,.03),0xf2c14e,0,.3,.2,{emissive:0x5a3d00})); return g; }
+};
+function makePlayer(){ const g=new THREE.Group(); const body=new THREE.Group();
+  body.add(part(Cyl(.2,.25,.48,12),0x2563eb,0,.36,0));
+  body.add(part(Sph(.19),0xf2c9a0,0,.78,0));
+  const cap=new THREE.Mesh(new THREE.SphereGeometry(.2,12,8,0,Math.PI*2,0,Math.PI/2),mat(0x1e3a8a)); cap.position.y=.81; cap.castShadow=true; body.add(cap);
+  body.add(part(Box(.18,.04,.12),0x1e3a8a,0,.82,.18));
+  for(const s of [-1,1]) body.add(part(new THREE.SphereGeometry(.03,6,4),0x111111,s*.07,.77,.17));
+  g.add(body); g.userData.body=body; return g; }
+
+function pickClip(anims, prefer){
+  if(!anims || !anims.length) return null;
+  for(const w of prefer){ const c=anims.find(a=>a.name.toLowerCase().indexOf(w)>=0); if(c) return c; }
+  return anims[0];
+}
+function makeObj(t, forPlay){
+  if(isCustom(t)){
+    const c=CUSTOM[t]; if(!c) return null;
+    const g = (THREE.SkeletonUtils ? THREE.SkeletonUtils.clone(c.proto) : c.proto.clone());
+    g.userData.custom=true;
+    const clip=pickClip(c.anims, forPlay && c.role==='monster' ? ['walk','run','fly','move','idle'] : ['idle','fly','walk']);
+    if(clip && !reduceMotion){ const mx=new THREE.AnimationMixer(g); mx.clipAction(clip).play(); g.userData.mixer=mx;
+      if(forPlay && c.role==='monster') g.userData.moveClip=true; }
+    return g;
+  }
+  return B[t] ? B[t]() : null;
+}
+
+const geoTile = Box(1,.2,1), geoWater = Box(1,.14,1);
+const matWater = new THREE.MeshStandardMaterial({color:new THREE.Color(0x3d8fd1).convertSRGBToLinear(),transparent:true,opacity:.88,roughness:.25,metalness:.05});
+function makeTile(t,x,z){
+  if(t==='water'){ const m=new THREE.Mesh(geoWater,matWater); m.position.y=-.13; m.receiveShadow=true; return m; }
+  let c=ITEMS[t].color;
+  if(t==='grass' && x!=null && (x+z)%2) c=0x67a849;
+  const m=new THREE.Mesh(geoTile,mat(c)); m.position.y=-.1; m.receiveShadow=true; return m;
+}
+function disposeGroup(g){
+  if(g.userData && g.userData.custom) return;
+  g.traverse(o=>{ if(o.geometry && o.geometry!==geoTile && o.geometry!==geoWater) o.geometry.dispose(); });
+}
+
+/* ---------- thumbnails ---------- */
+const thumbKit=(function(){
+  let r=null; try{ r=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true}); r.setPixelRatio(1); r.setSize(96,96,false); r.outputEncoding=THREE.sRGBEncoding; }catch(e){ r=null; }
+  const s=new THREE.Scene();
+  s.add(new THREE.HemisphereLight(0xffffff,0x667744,.9));
+  const d=new THREE.DirectionalLight(0xffffff,.8); d.position.set(3,5,2); s.add(d);
+  const cam=new THREE.PerspectiveCamera(32,1,.1,20); cam.position.set(1.9,1.7,2.3); cam.lookAt(0,.42,0);
+  const baseGeo=Box(1,.12,1);
+  return function(k){
+    if(!r) return '';
+    const g=new THREE.Group();
+    if(ITEMS[k] && ITEMS[k].kind==='tile'){ const t=makeTile(k); t.scale.set(.95,1.6,.95); t.position.y+=.32; g.add(t); }
+    else { const b=new THREE.Mesh(baseGeo,mat(0x6fb24f)); b.position.y=-.06; g.add(b); const o=makeObj(k); if(o) g.add(o); g.scale.setScalar(.88); }
+    s.add(g); r.render(s,cam); const url=r.domElement.toDataURL(); s.remove(g);
+    g.children.forEach(c=>{ if(c.geometry!==baseGeo) disposeGroup(c); });
+    return url;
+  };
+})();
+const thumbs={};
+for(const k in ITEMS) thumbs[k]=thumbKit(k);
+
+/* ---------- scene ---------- */
+const stage=document.getElementById('stage'), canvas=document.getElementById('cv');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0xa8d8f0);
+scene.fog=new THREE.Fog(0xa8d8f0,34,70);
+scene.add(new THREE.HemisphereLight(0xe6f4ff,0x55673a,.85));
+const sun=new THREE.DirectionalLight(0xfff1d6,1.0);
+sun.position.set(9,15,7); sun.castShadow=true;
+Object.assign(sun.shadow.camera,{left:-15,right:15,top:15,bottom:-15,near:1,far:50});
+sun.shadow.mapSize.set(2048,2048); sun.shadow.bias=-.0008;
+scene.add(sun);
+const base=new THREE.Mesh(Box(N+.3,1.2,N+.3),mat(0x6b4a2f)); base.position.y=-.8; scene.add(base);
+const base2=new THREE.Mesh(Box(N+.1,.5,N+.1),mat(0x8a6240)); base2.position.y=-.45; scene.add(base2);
+
+const camera=new THREE.PerspectiveCamera(45,1,.1,200);
+camera.position.set(0,17,17);
+const controls=new THREE.OrbitControls(camera,canvas);
+controls.enableDamping=true; controls.dampingFactor=.12;
+controls.maxPolarAngle=1.35; controls.minDistance=5; controls.maxDistance=40;
+controls.mouseButtons={LEFT:null,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.ROTATE};
+controls.touches={ONE:null,TWO:THREE.TOUCH.DOLLY_ROTATE};
+controls.target.set(0,0,0); controls.update();
+
+const grid=new THREE.GridHelper(N,N,0xffffff,0xffffff);
+grid.material.transparent=true; grid.material.opacity=.13; grid.position.y=.004; scene.add(grid);
+const hover=new THREE.Mesh(new THREE.PlaneGeometry(.96,.96),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.35,depthWrite:false}));
+hover.rotation.x=-Math.PI/2; hover.position.y=.01; hover.visible=false; scene.add(hover);
+
+const tileGroup=new THREE.Group(), objGroup=new THREE.Group(), playGroup=new THREE.Group();
+scene.add(tileGroup,objGroup,playGroup);
+
+new ResizeObserver(()=>{ const w=stage.clientWidth, h=stage.clientHeight; if(!w||!h) return;
+  renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }).observe(stage);
+
+/* ---------- toast ---------- */
+const toastEl=document.getElementById('toast'); let toastT=0;
+function toast(msg,bad){ toastEl.textContent=msg; toastEl.classList.toggle('bad',!!bad); toastEl.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>toastEl.hidden=true,4200); }
+
+/* ---------- map data ---------- */
+const key=(x,z)=>x+','+z;
+const wx=v=>v-HALF+.5;
+function emptyMap(){ return {size:N,tiles:{},objects:{}}; }
+function sampleMap(){
+  const m=emptyMap();
+  const T=(x,z,t)=>{m.tiles[key(x,z)]=t;}, O=(x,z,t,r)=>{m.objects[key(x,z)]={t,r:r||0,s:0};};
+  for(let i=0;i<N;i++) for(const [x,z] of [[i,0],[i,N-1],[0,i],[N-1,i]]) O(x,z,i%3?'pine':'tree');
+  for(let x=1;x<N-1;x++) T(x,10,'path');
+  for(let z=3;z<10;z++) T(9,z,'path');
+  for(let x=12;x<18;x++) for(let z=2;z<8;z++) T(x,z,(x>12&&x<17&&z>2&&z<7)?'water':'sand');
+  O(4,8,'house'); O(7,8,'house'); O(6,12,'house',2);
+  for(let x=2;x<5;x++) O(x,12,'fence');
+  for(let x=12;x<17;x++){ if(x!==14) O(x,13,'wall'); O(x,17,'wall'); }
+  for(let z=14;z<17;z++){ O(12,z,'wall'); O(16,z,'wall'); }
+  for(let x=13;x<16;x++) for(let z=14;z<17;z++) T(x,z,'sand');
+  [[3,4],[5,3],[4,15],[8,16],[2,6],[11,3]].forEach(p=>O(p[0],p[1],'tree'));
+  [[6,5],[11,15],[8,4],[3,14]].forEach(p=>O(p[0],p[1],'bush'));
+  [[17,9],[11,6],[6,17]].forEach(p=>O(p[0],p[1],'rock'));
+  O(2,10,'start'); O(17,11,'exit');
+  O(9,5,'monster'); O(15,14,'monster'); O(6,15,'monster',2);
+  O(14,15,'chest'); O(15,8,'chest'); O(2,16,'chest');
+  return m;
+}
+function validMap(m){ return m && typeof m==='object' && m.tiles && m.objects && typeof m.tiles==='object' && typeof m.objects==='object'; }
+function cleanMap(m){
+  const out=emptyMap();
+  const inB=(x,z)=>Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&x<N&&z<N;
+  for(const k in m.tiles){ const t=m.tiles[k]; const [x,z]=k.split(',').map(Number); if(ITEMS[t]&&ITEMS[t].kind==='tile'&&inB(x,z)&&t!=='grass') out.tiles[key(x,z)]=t; }
+  for(const k in m.objects){ const o=m.objects[k]; const [x,z]=k.split(',').map(Number);
+    if(o && typeof o.t==='string' && ((ITEMS[o.t]&&ITEMS[o.t].kind==='obj')||isCustom(o.t)) && inB(x,z))
+      out.objects[key(x,z)]={t:o.t,r:((o.r|0)%4+4)%4,s:Math.min(SIZES.length-1,Math.max(0,o.s|0))}; }
+  return out;
+}
+function loadSaved(){ try{ const s=localStorage.getItem(STORE); if(!s) return null; const m=JSON.parse(s); return validMap(m)?cleanMap(m):null; }catch(e){ return null; } }
+let saveTimer=0;
+function persist(){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ try{ localStorage.setItem(STORE,JSON.stringify(map)); }catch(e){} },300); }
+function exportMap(){
+  const models={};
+  for(const k in map.objects){ const t=map.objects[k].t; if(isCustom(t)&&CUSTOM[t]) models[t]={name:CUSTOM[t].name,role:CUSTOM[t].role}; }
+  return JSON.stringify(Object.assign({},map,{models}));
+}
+
+let map=loadSaved();
+if(!map || (!Object.keys(map.objects).length && !Object.keys(map.tiles).length)) map=sampleMap();
+const tileMeshes={}, objMeshes={};
+function buildTile(x,z){ const k=key(x,z); if(tileMeshes[k]) tileGroup.remove(tileMeshes[k]);
+  const m=makeTile(map.tiles[k]||'grass',x,z); m.position.x=wx(x); m.position.z=wx(z); tileGroup.add(m); tileMeshes[k]=m; }
+function placeGroup(g,x,z,o){ g.position.set(wx(x),0,wx(z)); g.rotation.y=o.r*Math.PI/2; g.scale.setScalar(SIZES[o.s|0]); g.userData.phase=Math.random()*6; }
+function buildObj(x,z){ const k=key(x,z);
+  if(objMeshes[k]){ objGroup.remove(objMeshes[k]); disposeGroup(objMeshes[k]); delete objMeshes[k]; }
+  const o=map.objects[k]; if(!o) return;
+  const g=makeObj(o.t); if(!g) return;
+  placeGroup(g,x,z,o); objGroup.add(g); objMeshes[k]=g; }
+function rebuildObjects(){ for(let x=0;x<N;x++) for(let z=0;z<N;z++) buildObj(x,z); updateStats(); }
+function rebuildAll(){ for(let x=0;x<N;x++) for(let z=0;z<N;z++){ buildTile(x,z); buildObj(x,z); } updateStats(); }
+function changed(){ persist(); updateStats(); }
+function setTile(x,z,t){ const k=key(x,z); if((map.tiles[k]||'grass')===t) return;
+  if(t==='grass') delete map.tiles[k]; else map.tiles[k]=t; buildTile(x,z); changed(); }
+function setObj(x,z,t,r,s){
+  if(t==='start') for(const k in map.objects) if(map.objects[k].t==='start'){ delete map.objects[k]; const p=k.split(',').map(Number); buildObj(p[0],p[1]); }
+  const k=key(x,z); if(map.tiles[k]==='water'){ delete map.tiles[k]; buildTile(x,z); }
+  map.objects[k]={t,r:r||0,s:s||0}; buildObj(x,z); changed(); }
+function removeObj(x,z){ delete map.objects[key(x,z)]; buildObj(x,z); changed(); }
+
+/* ---------- imported models (saved in this browser) ---------- */
+const idb={ db:null,
+  open(){ return new Promise(res=>{ try{ const q=indexedDB.open('warsha',1);
+    q.onupgradeneeded=()=>q.result.createObjectStore('models',{keyPath:'id'});
+    q.onsuccess=()=>{ idb.db=q.result; res(); }; q.onerror=()=>res(); q.onblocked=()=>res(); }catch(e){ res(); } }); },
+  tx(mode){ return idb.db.transaction('models',mode).objectStore('models'); },
+  all(){ return new Promise(res=>{ if(!idb.db) return res([]); try{ const q=idb.tx('readonly').getAll(); q.onsuccess=()=>res(q.result||[]); q.onerror=()=>res([]); }catch(e){ res([]); } }); },
+  put(rec){ try{ if(idb.db) idb.tx('readwrite').put(rec); }catch(e){} },
+  del(id){ try{ if(idb.db) idb.tx('readwrite').delete(id); }catch(e){} }
+};
+function parseModel(buf){ return new Promise((res,rej)=>{ try{ new THREE.GLTFLoader().parse(buf,'',res,rej); }catch(e){ rej(e); } }); }
+function normalize(raw,fix){
+  const f=FIXES[fix|0]||FIXES[0]; const scene=new THREE.Group(); scene.add(raw); scene.rotation.set(f[0],0,f[1]);
+  scene.updateMatrixWorld(true);
+  const box=new THREE.Box3().setFromObject(scene), size=box.getSize(new THREE.Vector3());
+  if(!isFinite(size.x) || size.x+size.y+size.z<=0) throw new Error('empty');
+  const s=Math.min(.95/Math.max(size.x,size.z,1e-4), 1.5/Math.max(size.y,1e-4));
+  scene.scale.multiplyScalar(s); scene.updateMatrixWorld(true);
+  const b2=new THREE.Box3().setFromObject(scene), c=b2.getCenter(new THREE.Vector3());
+  scene.position.x-=c.x; scene.position.z-=c.z; scene.position.y-=b2.min.y;
+  scene.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; o.frustumCulled=false; } });
+  const holder=new THREE.Group(); holder.add(scene); return holder;
+}
+function guessRole(name){
+  const n=name.toLowerCase();
+  if(/monster|enemy|zombie|ghost|slime|skeleton|dragon|orc|goblin|spider|bat|demon|alien|wolf|bee|mushnub|yeti|cyclops/.test(n)) return 'monster';
+  if(/chest|coin|gem|treasure|crystal|diamond|key|star/.test(n)) return 'chest';
+  if(/grass|flower|plant|bush|mushroom|clover|petal|leaf|path|tile|floor|rug/.test(n)) return 'deco';
+  return 'block';
+}
+function registerCustom(id,name,role,gltf,buf,fix){
+  const proto=normalize(gltf.scene || (gltf.scenes && gltf.scenes[0]), fix);
+  CUSTOM[id]={name,role,proto,anims:gltf.animations||[],buf,fix:fix|0};
+  ITEMS[id]={name,kind:'obj',custom:true};
+  thumbs[id]=thumbKit(id);
+}
+function saveRec(id){ const c=CUSTOM[id]; if(c) idb.put({id,name:c.name,role:c.role,fix:c.fix,data:c.buf}); }
+async function fixCustom(id){
+  const c=CUSTOM[id]; if(!c||!c.buf) return;
+  const next=(c.fix+1)%FIXES.length;
+  try{ const gltf=await parseModel(c.buf); registerCustom(id,c.name,c.role,gltf,c.buf,next); saveRec(id);
+    rebuildObjects(); renderPalette();
+    toast(next===0?'رجع مثل ما كان. اضغط مرة ثانية لو لسا طايح.':'دوّرته. لو لسا مو واقف، اضغط مرة ثانية.');
+  }catch(e){ toast('ما قدرت أعدّله',true); }
+}
+async function importFiles(list){
+  const files=[...list]; let added=0, lastId=null;
+  for(const f of files){
+    if(!/\.(glb|gltf)$/i.test(f.name)){ toast('الملف «'+f.name+'» مو GLB. حمّله من الموقع بصيغة GLB.',true); continue; }
+    const name=f.name.replace(/\.(glb|gltf)$/i,'').replace(/[_-]+/g,' ').trim().slice(0,24) || 'شي جديد';
+    try{
+      const buf=await f.arrayBuffer();
+      const gltf=await parseModel(buf);
+      const id='c:'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      const role=guessRole(f.name);
+      registerCustom(id,name,role,gltf,buf,0);
+      idb.put({id,name,role,fix:0,data:buf}); added++; lastId=id;
+    }catch(e){ toast('ما قدرت أفتح «'+f.name+'». جرّب تحمّله مرة ثانية بصيغة GLB.',true); }
+  }
+  if(added){ sel=lastId; setTool('place'); renderPalette(); toast(added>1?('انضاف '+added+' أشياء لقائمتك'):('انضاف «'+CUSTOM[lastId].name+'». اضغط على الأرض عشان تحطه.')); }
+}
+function deleteCustom(id){
+  for(const k in map.objects) if(map.objects[k].t===id) delete map.objects[k];
+  delete CUSTOM[id]; delete ITEMS[id]; delete thumbs[id]; idb.del(id);
+  if(sel===id) sel='tree';
+  rebuildObjects(); persist(); renderPalette();
+}
+const fileIn=document.getElementById('fileIn');
+fileIn.addEventListener('change',()=>{ if(fileIn.files.length) importFiles(fileIn.files); fileIn.value=''; });
+['dragenter','dragover'].forEach(ev=>stage.addEventListener(ev,e=>{ if(mode!=='edit') return; e.preventDefault(); stage.classList.add('drop'); }));
+['dragleave','drop'].forEach(ev=>stage.addEventListener(ev,e=>{ e.preventDefault(); stage.classList.remove('drop'); }));
+stage.addEventListener('drop',e=>{ if(mode==='edit' && e.dataTransfer && e.dataTransfer.files.length) importFiles(e.dataTransfer.files); });
+
+/* ---------- UI: palette & tools ---------- */
+let tool='place', sel='tree', delArmed=0;
+const palette=document.getElementById('palette');
+function itemButton(k){
+  const b=document.createElement('button'); b.className='item'; b.id='item-'+k.replace(':','-'); b.dataset.item=k;
+  b.setAttribute('aria-pressed',String(k===sel)); b.title=ITEMS[k].name;
+  if(thumbs[k]){ const img=document.createElement('img'); img.src=thumbs[k]; img.alt=''; b.appendChild(img); }
+  const s=document.createElement('span'); s.textContent=ITEMS[k].name; b.appendChild(s);
+  b.addEventListener('click',()=>{ sel=k; setTool('place'); renderPalette(); });
+  return b;
+}
+function renderPalette(){
+  const st=palette.scrollTop; palette.innerHTML='';
+  // imported things first
+  const mine=document.createElement('div'); mine.className='group mine';
+  const h=document.createElement('h2'); h.textContent='أشيائي من برا';
+  const how=document.createElement('button'); how.textContent='كيف؟'; how.onclick=()=>openGuide(); h.appendChild(how);
+  mine.appendChild(h);
+  const g=document.createElement('div'); g.className='items';
+  const add=document.createElement('button'); add.className='item add'; add.id='addModel';
+  add.innerHTML='<b>+</b><span>أضف</span>'; add.title='أضف ملف GLB من جهازك';
+  add.onclick=()=>fileIn.click(); g.appendChild(add);
+  const ids=Object.keys(CUSTOM);
+  ids.forEach(id=>g.appendChild(itemButton(id)));
+  mine.appendChild(g);
+  if(!ids.length){ const p=document.createElement('p'); p.className='empty'; p.textContent='حمّل أي شي من poly.pizza بصيغة GLB واضغط «أضف». اضغط «كيف؟» للشرح.'; mine.appendChild(p); }
+  if(isCustom(sel) && CUSTOM[sel]){
+    const c=CUSTOM[sel], box=document.createElement('div'); box.className='cset';
+    const p=document.createElement('p'); p.textContent='«'+c.name+'» في اللعب يكون:'; box.appendChild(p);
+    const roles=document.createElement('div'); roles.className='roles'; roles.setAttribute('role','radiogroup');
+    for(const r in ROLES){ const rb=document.createElement('button'); rb.id='role-'+r; rb.textContent=ROLES[r]; rb.setAttribute('role','radio'); rb.setAttribute('aria-checked',String(c.role===r));
+      rb.onclick=()=>{ if(r==='player') for(const id in CUSTOM) if(id!==sel && CUSTOM[id].role==='player'){ CUSTOM[id].role='deco'; saveRec(id); }
+        c.role=r; saveRec(sel); updateStats(); renderPalette(); if(r==='player') toast('تمام! لما تضغط «جرّب العب» بتلعب بـ «'+c.name+'»'); };
+      roles.appendChild(rb); }
+    box.appendChild(roles);
+    const fx=document.createElement('button'); fx.id='fixModel'; fx.textContent='طايح أو مقلوب؟ اضغط عشان توقفه';
+    fx.onclick=()=>fixCustom(sel); box.appendChild(fx);
+    const del=document.createElement('button'); del.className='ghost'; del.id='delModel'; del.textContent='احذفه من قائمتي';
+    del.onclick=()=>{ if(!delArmed){ delArmed=setTimeout(()=>{ delArmed=0; if(del.isConnected){ del.textContent='احذفه من قائمتي'; del.classList.remove('warn'); } },3000); del.textContent='متأكد؟ بينحذف من الماب كمان'; del.classList.add('warn'); return; }
+      clearTimeout(delArmed); delArmed=0; deleteCustom(sel); };
+    box.appendChild(del); mine.appendChild(box);
+  }
+  palette.appendChild(mine);
+  GROUPS.forEach(([title,list])=>{
+    const sec=document.createElement('div'); sec.className='group';
+    const hh=document.createElement('h2'); hh.textContent=title; sec.appendChild(hh);
+    const gg=document.createElement('div'); gg.className='items';
+    list.forEach(k=>gg.appendChild(itemButton(k)));
+    sec.appendChild(gg); palette.appendChild(sec);
+  });
+  palette.scrollTop=st; updateHint();
+}
+function setTool(t){ tool=t; document.querySelectorAll('.tools button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.tool===t)));
+  hover.material.color.set(t==='erase'?0xff6b6b:(t==='rotate'||t==='size')?0xffb547:0xffffff); updateHint(); }
+document.querySelectorAll('.tools button').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
+const hintEl=document.getElementById('hint');
+function updateHint(){
+  hintEl.textContent = tool==='place' ? ('اضغط على الأرض عشان تحط: '+(ITEMS[sel]?ITEMS[sel].name:''))
+    : tool==='rotate' ? 'اضغط على أي شي عشان تدوّره'
+    : tool==='size' ? 'اضغط على أي شي عشان تكبّره أو تصغّره'
+    : 'اضغط على أي شي عشان تمسحه';
+}
+function updateStats(){
+  const c={monster:0,chest:0,start:0,exit:0}; let missing=0;
+  for(const k in map.objects){ const t=map.objects[k].t; if(isCustom(t)&&!CUSTOM[t]) missing++; const r=roleOf(t); if(r in c) c[r]++; }
+  const el=document.getElementById('stats'); el.innerHTML='';
+  const add=(txt,bad)=>{ const s=document.createElement('span'); s.className='pill'+(bad?' bad':''); s.textContent=txt; el.appendChild(s); };
+  add('وحوش: '+c.monster); add('كنوز: '+c.chest);
+  if(!c.start) add('ما فيه بداية',true);
+  if(!c.exit) add('ما فيه مخرج',true);
+  if(missing) add('أشياء ناقصة: '+missing,true);
+}
+
+/* ---------- editing with pointer ---------- */
+const ray=new THREE.Raycaster(), ndc=new THREE.Vector2(), ground=new THREE.Plane(new THREE.Vector3(0,1,0),0), hit=new THREE.Vector3();
+function cellFromEvent(e){
+  const r=canvas.getBoundingClientRect();
+  ndc.set(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+  ray.setFromCamera(ndc,camera);
+  if(!ray.ray.intersectPlane(ground,hit)) return null;
+  const x=Math.floor(hit.x+HALF), z=Math.floor(hit.z+HALF);
+  if(x<0||z<0||x>=N||z>=N) return null;
+  return {x,z,k:key(x,z)};
+}
+let painting=false, lastCell=null;
+function apply(c,first){
+  const o=map.objects[c.k];
+  if(tool==='place'){
+    if(!ITEMS[sel]) return;
+    if(ITEMS[sel].kind==='tile'){ if(o && sel==='water') removeObj(c.x,c.z); setTile(c.x,c.z,sel); }
+    else if(first){ setObj(c.x,c.z,sel,o&&o.t===sel?o.r:0,o&&o.t===sel?o.s:0); }
+  } else if(tool==='erase'){
+    if(o) removeObj(c.x,c.z); else setTile(c.x,c.z,'grass');
+  } else if(tool==='rotate' && first && o){
+    o.r=(o.r+1)%4; buildObj(c.x,c.z); changed();
+  } else if(tool==='size' && first && o){
+    o.s=((o.s|0)+1)%SIZES.length; buildObj(c.x,c.z); changed(); toast('الحجم: '+SIZE_NAMES[o.s]);
+  }
+}
+canvas.addEventListener('pointerdown',e=>{
+  if(mode!=='edit') return;
+  if(e.pointerType==='mouse' && e.button!==0) return;
+  const c=cellFromEvent(e); if(!c) return;
+  painting=true; lastCell=c.k; apply(c,true);
+  try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
+});
+canvas.addEventListener('pointermove',e=>{
+  if(mode!=='edit') return;
+  const c=cellFromEvent(e);
+  if(!c){ hover.visible=false; return; }
+  hover.visible=true; hover.position.x=wx(c.x); hover.position.z=wx(c.z);
+  hover.position.y = map.objects[c.k] ? 1.02 : .01;
+  if(painting && c.k!==lastCell){ lastCell=c.k; apply(c,false); }
+});
+['pointerup','pointercancel'].forEach(ev=>canvas.addEventListener(ev,()=>{ painting=false; }));
+canvas.addEventListener('pointerleave',()=>{ hover.visible=false; });
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+const UP=new THREE.Vector3(0,1,0);
+function orbit(a){ const off=camera.position.clone().sub(controls.target); off.applyAxisAngle(UP,a); camera.position.copy(controls.target).add(off); controls.update(); }
+function zoom(f){ const off=camera.position.clone().sub(controls.target).multiplyScalar(f); const d=off.length(); if(d<5||d>40) return; camera.position.copy(controls.target).add(off); controls.update(); }
+document.getElementById('vLeft').onclick=()=>orbit(Math.PI/8);
+document.getElementById('vRight').onclick=()=>orbit(-Math.PI/8);
+document.getElementById('vIn').onclick=()=>zoom(.85);
+document.getElementById('vOut').onclick=()=>zoom(1.18);
+
+/* ---------- header buttons & dialogs ---------- */
+const clearBtn=document.getElementById('btnClear'); let clearArmed=0;
+clearBtn.onclick=()=>{
+  if(!clearArmed){ clearArmed=setTimeout(()=>{ clearArmed=0; clearBtn.textContent='مسح الكل'; clearBtn.classList.remove('warn'); },3000);
+    clearBtn.textContent='متأكد؟ اضغط مرة ثانية'; clearBtn.classList.add('warn'); return; }
+  clearTimeout(clearArmed); clearArmed=0; clearBtn.textContent='مسح الكل'; clearBtn.classList.remove('warn');
+  map=emptyMap(); rebuildAll(); try{ localStorage.setItem(STORE,JSON.stringify(map)); }catch(e){}
+};
+document.getElementById('btnSample').onclick=()=>{ map=sampleMap(); rebuildAll(); persist(); };
+
+const guideBox=document.getElementById('guideBox');
+function openGuide(){ guideBox.hidden=false; }
+function closeGuide(){ guideBox.hidden=true; try{ localStorage.setItem(SEEN,'1'); }catch(e){} }
+document.getElementById('btnGuide').onclick=openGuide;
+document.getElementById('btnGuideOk').onclick=closeGuide;
+document.getElementById('btnGuideAdd').onclick=()=>{ closeGuide(); fileIn.click(); };
+guideBox.addEventListener('click',e=>{ if(e.target===guideBox) closeGuide(); });
+let seen=false; try{ seen=!!localStorage.getItem(SEEN); }catch(e){}
+if(!seen) openGuide();
+
+const saveBox=document.getElementById('saveBox'), mapText=document.getElementById('mapText'), saveMsg=document.getElementById('saveMsg');
+document.getElementById('btnSave').onclick=()=>{ mapText.value=exportMap(); saveMsg.textContent=''; saveBox.hidden=false; };
+document.getElementById('btnCloseSave').onclick=()=>{ saveBox.hidden=true; };
+saveBox.addEventListener('click',e=>{ if(e.target===saveBox) saveBox.hidden=true; });
+document.getElementById('btnCopy').onclick=()=>{
+  const fallback=()=>{ mapText.focus(); mapText.select(); saveMsg.textContent='الكود محدد، اضغط Cmd+C عشان تنسخه.'; };
+  try{ navigator.clipboard.writeText(mapText.value).then(()=>{ saveMsg.textContent='انتسخ. الصقه لي في المحادثة.'; },fallback); }catch(e){ fallback(); }
+};
+document.getElementById('btnLoad').onclick=()=>{
+  try{ const m=JSON.parse(mapText.value); if(!validMap(m)) throw 0;
+    map=cleanMap(m); rebuildAll(); persist(); saveMsg.textContent='تم تحميل الخريطة.';
+  }catch(e){ saveMsg.textContent='الكود هذا مو كود خريطة. تأكد إنك نسخته كامل.'; }
+};
+addEventListener('keydown',e=>{ if(e.code==='Escape'){ if(!guideBox.hidden) closeGuide(); else if(!saveBox.hidden) saveBox.hidden=true; } });
+
+/* ---------- play mode ---------- */
+let mode='edit', P=null, savedCam=null;
+const app=document.getElementById('app'), playBtn=document.getElementById('btnPlay');
+const hud=document.getElementById('hud'), heartsEl=document.getElementById('hearts'), lootEl=document.getElementById('loot');
+const playHint=document.getElementById('playhint'), dpad=document.getElementById('dpad'), endBox=document.getElementById('endBox');
+const keys={up:false,down:false,left:false,right:false};
+
+function computeBlock(){
+  const g=new Uint8Array(N*N);
+  for(const k in map.tiles) if(map.tiles[k]==='water'){ const [x,z]=k.split(',').map(Number); g[z*N+x]=1; }
+  for(const k in map.objects){ const o=map.objects[k]; if(roleOf(o.t)!=='block') continue;
+    const [x,z]=k.split(',').map(Number), rad=SIZES[o.s|0]*.45, R=Math.ceil(rad);
+    for(let dx=-R;dx<=R;dx++) for(let dz=-R;dz<=R;dz++){ const cx=x+dx, cz=z+dz;
+      if(cx>=0&&cz>=0&&cx<N&&cz<N&&Math.hypot(dx,dz)<=Math.max(rad,.01)) g[cz*N+cx]=1; } }
+  return g;
+}
+function blockedCell(cx,cz){ if(cx<0||cz<0||cx>=N||cz>=N) return true; return P && P.block[cz*N+cx]===1; }
+function blockedAt(x,z,r){
+  for(const dx of [-r,r]) for(const dz of [-r,r]) if(blockedCell(Math.floor(x+dx+HALF),Math.floor(z+dz+HALF))) return true;
+  return false;
+}
+function tryMove(e,dx,dz,r){ let moved=0;
+  if(dx && !blockedAt(e.x+dx,e.z,r)){ e.x+=dx; moved+=Math.abs(dx); }
+  if(dz && !blockedAt(e.x,e.z+dz,r)){ e.z+=dz; moved+=Math.abs(dz); }
+  return moved; }
+function spawnCell(){
+  for(const k in map.objects) if(map.objects[k].t==='start') return k.split(',').map(Number);
+  for(const k in map.objects) if(roleOf(map.objects[k].t)==='player') return k.split(',').map(Number);
+  for(let d=0;d<N;d++) for(let x=HALF-d;x<=HALF+d;x++) for(let z=HALF-d;z<=HALF+d;z++)
+    if(x>=0&&z>=0&&x<N&&z<N&&!blockedCell(x,z)&&!map.objects[key(x,z)]) return [x,z];
+  return [HALF,HALF];
+}
+function randomTarget(m){
+  for(let i=0;i<12;i++){ const cx=m.hx+Math.round((Math.random()*2-1)*3), cz=m.hz+Math.round((Math.random()*2-1)*3);
+    if(!blockedCell(cx,cz)){ m.tx=wx(cx); m.tz=wx(cz); return; } }
+  m.tx=wx(m.hx); m.tz=wx(m.hz);
+}
+function startPlay(){
+  if(mode==='edit') savedCam={pos:camera.position.clone(),target:controls.target.clone()};
+  clearPlay();
+  mode='play'; app.classList.add('playing'); document.getElementById('panel').hidden=true;
+  objGroup.visible=false; grid.visible=false; hover.visible=false; controls.enabled=false;
+  hintEl.hidden=true; toastEl.hidden=true; document.getElementById('viewbtns').hidden=true;
+  hud.hidden=false; playHint.hidden=false; dpad.hidden=false; endBox.hidden=true;
+  playBtn.textContent='رجوع للتصميم';
+  P={hearts:3,inv:0,monsters:[],chests:[],exits:[],got:0,over:false,t:0,block:computeBlock()};
+  for(const k in map.objects){
+    const o=map.objects[k], [x,z]=k.split(',').map(Number), role=roleOf(o.t);
+    if(o.t==='start' || role==='player') continue;
+    const g=makeObj(o.t,true); if(!g) continue;
+    placeGroup(g,x,z,o); playGroup.add(g);
+    const sc=SIZES[o.s|0];
+    if(role==='monster'){ const m={g,x:wx(x),z:wx(z),hx:x,hz:z,tx:wx(x),tz:wx(z),r:.28*Math.min(sc,1.5),base:o.r*Math.PI/2}; randomTarget(m); P.monsters.push(m); }
+    else if(role==='chest') P.chests.push({g,x:wx(x),z:wx(z),taken:false});
+    else if(role==='exit') P.exits.push({x:wx(x),z:wx(z)});
+  }
+  const [sx,sz]=spawnCell();
+  const heroId=Object.keys(CUSTOM).find(id=>CUSTOM[id].role==='player');
+  let pg, anim=null;
+  if(heroId){
+    const c=CUSTOM[heroId];
+    pg=THREE.SkeletonUtils ? THREE.SkeletonUtils.clone(c.proto) : c.proto.clone(); pg.userData.custom=true;
+    if(c.anims.length){
+      const mx=new THREE.AnimationMixer(pg);
+      const idle=pickClip(c.anims,['idle','stand','breath']), walk=pickClip(c.anims,['walk','run','move','jog']);
+      const a={mx,idle:mx.clipAction(idle),walk:walk&&walk!==idle?mx.clipAction(walk):null,moving:false};
+      a.idle.play(); if(a.walk){ a.walk.play(); a.walk.setEffectiveWeight(0); }
+      anim=a;
+    }
+  } else pg=makePlayer();
+  playGroup.add(pg);
+  P.player={g:pg,x:wx(sx),z:wx(sz),anim}; pg.position.set(P.player.x,0,P.player.z); pg.rotation.y=Math.PI;
+  camera.position.set(P.player.x,8,P.player.z+7); camera.lookAt(P.player.x,.5,P.player.z);
+  updateHud();
+}
+function clearPlay(){ while(playGroup.children.length){ const c=playGroup.children[0]; playGroup.remove(c); disposeGroup(c); } }
+function stopPlay(){
+  clearPlay(); mode='edit'; P=null;
+  app.classList.remove('playing'); document.getElementById('panel').hidden=false;
+  objGroup.visible=true; grid.visible=true; controls.enabled=true;
+  hintEl.hidden=false; document.getElementById('viewbtns').hidden=false;
+  hud.hidden=true; playHint.hidden=true; dpad.hidden=true; endBox.hidden=true;
+  playBtn.textContent='جرّب العب';
+  if(savedCam){ camera.position.copy(savedCam.pos); controls.target.copy(savedCam.target); controls.update(); }
+  for(const k in keys) keys[k]=false;
+}
+function updateHud(){
+  heartsEl.innerHTML=''; for(let i=0;i<3;i++){ const s=document.createElement('span'); s.textContent='♥'; if(i>=P.hearts) s.className='lost'; heartsEl.appendChild(s); }
+  lootEl.innerHTML='الكنوز: <b>'+P.got+'</b> من '+P.chests.length;
+}
+function endGame(win){
+  P.over=true; endBox.hidden=false;
+  document.getElementById('endTitle').textContent= win ? 'فزت!' : 'خسرت';
+  document.getElementById('endText').textContent= win
+    ? ('وصلت وجمعت '+P.got+' من '+P.chests.length+' كنوز.')
+    : 'الوحوش مسكتك. جرّب مرة ثانية وانتبه لهم.';
+}
+playBtn.onclick=()=>{ mode==='edit'?startPlay():stopPlay(); };
+document.getElementById('btnAgain').onclick=()=>startPlay();
+document.getElementById('btnBack').onclick=()=>stopPlay();
+
+const KEYMAP={ArrowUp:'up',KeyW:'up',ArrowDown:'down',KeyS:'down',ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right'};
+addEventListener('keydown',e=>{
+  if(e.target && e.target.tagName==='TEXTAREA') return;
+  if(mode==='play'){
+    if(e.code==='Escape'){ stopPlay(); return; }
+    const k=KEYMAP[e.code]; if(k){ keys[k]=true; e.preventDefault(); }
+  }
+});
+addEventListener('keyup',e=>{ const k=KEYMAP[e.code]; if(k) keys[k]=false; });
+addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
+dpad.querySelectorAll('button').forEach(b=>{
+  const k=b.dataset.k;
+  b.addEventListener('pointerdown',e=>{ e.preventDefault(); keys[k]=true; try{ b.setPointerCapture(e.pointerId);}catch(_){} });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=>b.addEventListener(ev,()=>{ keys[k]=false; }));
+});
+
+const tmpV=new THREE.Vector3();
+function updatePlay(dt){
+  P.t+=dt;
+  const p=P.player;
+  if(!P.over){
+    let mx=(keys.right?1:0)-(keys.left?1:0), mz=(keys.down?1:0)-(keys.up?1:0);
+    const len=Math.hypot(mx,mz);
+    if(len){ mx/=len; mz/=len; tryMove(p,mx*3.2*dt,mz*3.2*dt,.26); p.g.rotation.y=Math.atan2(mx,mz);
+      if(p.g.userData.body) p.g.userData.body.position.y=Math.abs(Math.sin(P.t*12))*.06; }
+    else if(p.g.userData.body) p.g.userData.body.position.y*=.8;
+    if(p.anim){ const mv=!!len;
+      if(p.anim.walk && mv!==p.anim.moving){ p.anim.moving=mv; p.anim.walk.setEffectiveWeight(mv?1:0); p.anim.idle.setEffectiveWeight(mv?0:1); }
+      p.anim.mx.update(dt); }
+    else if(!p.g.userData.body && len){ p.g.position.y=Math.abs(Math.sin(P.t*12))*.06; }
+    p.g.position.set(p.x,0,p.z);
+
+    for(const m of P.monsters){
+      const dx=p.x-m.x, dz=p.z-m.z, d=Math.hypot(dx,dz);
+      const chase=d<5.5;
+      if(chase){ m.tx=p.x; m.tz=p.z; }
+      const tx=m.tx-m.x, tz=m.tz-m.z, td=Math.hypot(tx,tz);
+      if(td<.12 && !chase) randomTarget(m);
+      else if(td>.001){
+        const sp=(chase?2.1:1.0)*dt, vx=tx/td*sp, vz=tz/td*sp;
+        const moved=tryMove(m,vx,vz,m.r);
+        if(moved<sp*.2 && !chase) randomTarget(m);
+        m.g.rotation.y=Math.atan2(vx,vz);
+      }
+      m.g.position.x=m.x; m.g.position.z=m.z;
+      if(d<.62 && P.inv<=0){
+        P.hearts--; P.inv=1.3; updateHud();
+        const kd=d||1; tryMove(p,dx/kd*.9,dz/kd*.9,.26);
+        if(P.hearts<=0){ endGame(false); break; }
+      }
+    }
+    for(const c of P.chests){
+      if(!c.taken && Math.hypot(p.x-c.x,p.z-c.z)<.65){ c.taken=true; playGroup.remove(c.g); disposeGroup(c.g); P.got++; updateHud();
+        if(!P.exits.length && P.got===P.chests.length) endGame(true); }
+    }
+    if(!P.over) for(const ex of P.exits) if(Math.hypot(p.x-ex.x,p.z-ex.z)<.6){ endGame(true); break; }
+    if(P.inv>0){ P.inv-=dt; p.g.visible = P.inv<=0 || Math.floor(P.inv*10)%2===0; } else p.g.visible=true;
+  }
+  const k=1-Math.exp(-dt*5);
+  camera.position.lerp(tmpV.set(p.x,8,p.z+7),k);
+  camera.lookAt(camera.position.x,.5,camera.position.z-7);
+}
+
+function animate(group,t,dt){
+  for(const g of group.children){
+    const u=g.userData;
+    if(u.mixer) u.mixer.update(dt);
+    if(reduceMotion) continue;
+    if(u.bob) u.bob.position.y=Math.abs(Math.sin(t*3+u.phase))*.07;
+    if(u.spin) u.spin.rotation.y=t*1.2;
+  }
+}
+
+/* ---------- loop ---------- */
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(.05,(now-last)/1000); last=now; const t=now/1000;
+  if(mode==='edit'){ controls.update(); animate(objGroup,t,dt); }
+  else { animate(playGroup,t,dt); if(P) updatePlay(dt); }
+  renderer.render(scene,camera);
+  requestAnimationFrame(loop);
+}
+rebuildAll(); renderPalette(); setTool('place');
+requestAnimationFrame(loop);
+
+/* load models saved earlier in this browser */
+idb.open().then(()=>idb.all()).then(async recs=>{
+  let n=0;
+  for(const r of recs){ try{ const gltf=await parseModel(r.data); registerCustom(r.id,r.name,r.role||'block',gltf,r.data,r.fix|0); n++; }catch(e){} }
+  if(n){ rebuildObjects(); renderPalette(); }
+});
+})();
+</script>
+
+</body>
+</html>
