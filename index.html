@@ -171,7 +171,7 @@ textarea{width:100%;height:150px;resize:vertical;background:var(--bg);color:var(
     </section>
   </main>
 
-  <input type="file" id="fileIn" accept=".glb,.gltf" multiple hidden>
+  <input type="file" id="fileIn" accept=".glb,.gltf,.fbx" multiple hidden>
 
   <div class="overlay modal" id="guideBox" hidden>
     <div class="card wide">
@@ -195,6 +195,12 @@ textarea{width:100%;height:150px;resize:vertical;background:var(--bg);color:var(
         <li>في <a href="https://poly.pizza" target="_blank" rel="noopener">poly.pizza</a> ابحث عن <code>animated</code> أو <code>quaternius</code>. هذي موديلات فيها مشي ووقوف جاهز.</li>
         <li>أو ادخل <a href="https://quaternius.com" target="_blank" rel="noopener">quaternius.com</a> وحمّل باك مثل <b>Ultimate Monsters</b> أو <b>Animated Characters</b>، وكل شخصية فيها مشي وجري وهجوم.</li>
         <li>بعد ما تضيفها، اختر لها <b>اللاعب (أنت)</b> عشان تلعب فيها، أو <b>وحش</b> عشان تطاردك. الورشة تشغّل المشي لحاله.</li>
+      </ol>
+      <h3>من Mixamo</h3>
+      <ol class="steps">
+        <li>اختر الحركة، وعلّم على <b>In Place</b> (عشان يمشي في مكانه واللعبة هي اللي تحركه).</li>
+        <li>اضغط <b>Download</b>، وخل الصيغة <b>FBX</b> و <b>With Skin</b>.</li>
+        <li>أضف ملف الـ FBX في الورشة مثل أي شي.</li>
       </ol>
       <p>مواقع ثانية فيها باكات كاملة بنفس الستايل: <a href="https://kenney.nl/assets" target="_blank" rel="noopener">kenney.nl</a> و <a href="https://quaternius.com" target="_blank" rel="noopener">quaternius.com</a> (تنزل ملف مضغوط، تفتحه، وتدور على الملفات اللي تنتهي بـ <code>.glb</code>).</p>
       <p>الأشياء اللي تضيفها تنحفظ في هذا المتصفح. عشان أشتغل عليها أنا، ارفع ملفات الـ GLB في GitHub داخل مجلد اسمه <code>models</code> مع كود الخريطة.</p>
@@ -220,6 +226,8 @@ textarea{width:100%;height:150px;resize:vertical;background:var(--bg);color:var(
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/fflate.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
 <script>
 (function(){
@@ -488,7 +496,21 @@ const idb={ db:null,
   put(rec){ try{ if(idb.db) idb.tx('readwrite').put(rec); }catch(e){} },
   del(id){ try{ if(idb.db) idb.tx('readwrite').delete(id); }catch(e){} }
 };
-function parseModel(buf){ return new Promise((res,rej)=>{ try{ new THREE.GLTFLoader().parse(buf,'',res,rej); }catch(e){ rej(e); } }); }
+const extOf=n=>{ const m=/\.(glb|gltf|fbx)$/i.exec(n||''); return m?m[1].toLowerCase():''; };
+function cleanClips(anims,label){
+  (anims||[]).forEach(c=>{
+    if(anims.length===1 && label && (!c.name || /mixamo|take|layer|default|^animation/i.test(c.name))) c.name=label;
+    c.tracks.forEach(t=>{ if(/hips\.position$/i.test(t.name) && t.getValueSize()===3){ const v=t.values; for(let i=3;i<v.length;i+=3){ v[i]=v[0]; v[i+2]=v[2]; } } });
+  });
+  return anims||[];
+}
+function parseModel(buf,fmt,label){ return new Promise((res,rej)=>{ try{
+  if(fmt==='fbx'){
+    if(!THREE.FBXLoader) return rej(new Error('no fbx'));
+    const obj=new THREE.FBXLoader().parse(buf,'');
+    res({scene:obj,animations:cleanClips(obj.animations,label)});
+  } else new THREE.GLTFLoader().parse(buf,'',g=>{ cleanClips(g.animations,label); res(g); },rej);
+}catch(e){ rej(e); } }); }
 function normalize(raw,fix){
   const f=FIXES[fix|0]||FIXES[0]; const scene=new THREE.Group(); scene.add(raw); scene.rotation.set(f[0],0,f[1]);
   scene.updateMatrixWorld(true);
@@ -510,15 +532,19 @@ function guessRole(name){
 }
 function registerCustom(id,name,role,gltf,buf,fix){
   const proto=normalize(gltf.scene || (gltf.scenes && gltf.scenes[0]), fix);
-  CUSTOM[id]={name,role,proto,anims:gltf.animations||[],buf,fix:fix|0};
+  CUSTOM[id]={name,role,proto,anims:gltf.animations||[],buf,fix:fix|0,fmt:gltf.fmt||'glb',label:gltf.label||''};
   ITEMS[id]={name,kind:'obj',custom:true};
   thumbs[id]=thumbKit(id);
 }
-function saveRec(id){ const c=CUSTOM[id]; if(c) idb.put({id,name:c.name,role:c.role,fix:c.fix,data:c.buf}); }
+function saveRec(id){ const c=CUSTOM[id]; if(!c) return;
+  if(id.indexOf('c:r:')===0){ const o=repoOverrides(); o[id]={role:c.role,fix:c.fix}; try{ localStorage.setItem(REPO_KEY,JSON.stringify(o)); }catch(e){} return; }
+  idb.put({id,name:c.name,role:c.role,fix:c.fix,fmt:c.fmt,label:c.label,data:c.buf}); }
+const REPO_KEY='warsha-repo-models';
+function repoOverrides(){ try{ return JSON.parse(localStorage.getItem(REPO_KEY)||'{}')||{}; }catch(e){ return {}; } }
 async function fixCustom(id){
   const c=CUSTOM[id]; if(!c||!c.buf) return;
   const next=(c.fix+1)%FIXES.length;
-  try{ const gltf=await parseModel(c.buf); registerCustom(id,c.name,c.role,gltf,c.buf,next); saveRec(id);
+  try{ const gltf=await parseModel(c.buf,c.fmt,c.label); gltf.fmt=c.fmt; gltf.label=c.label; registerCustom(id,c.name,c.role,gltf,c.buf,next); saveRec(id);
     rebuildObjects(); renderPalette();
     toast(next===0?'رجع مثل ما كان. اضغط مرة ثانية لو لسا طايح.':'دوّرته. لو لسا مو واقف، اضغط مرة ثانية.');
   }catch(e){ toast('ما قدرت أعدّله',true); }
@@ -526,22 +552,25 @@ async function fixCustom(id){
 async function importFiles(list){
   const files=[...list]; let added=0, lastId=null;
   for(const f of files){
-    if(!/\.(glb|gltf)$/i.test(f.name)){ toast('الملف «'+f.name+'» مو GLB. حمّله من الموقع بصيغة GLB.',true); continue; }
-    const name=f.name.replace(/\.(glb|gltf)$/i,'').replace(/[_-]+/g,' ').trim().slice(0,24) || 'شي جديد';
+    const fmt=extOf(f.name);
+    if(!fmt){ toast('الملف «'+f.name+'» لازم يكون GLB أو FBX.',true); continue; }
+    const label=f.name.replace(/\.(glb|gltf|fbx)$/i,'');
+    const name=label.replace(/[_-]+/g,' ').trim().slice(0,24) || 'شي جديد';
     try{
       const buf=await f.arrayBuffer();
-      const gltf=await parseModel(buf);
+      const gltf=await parseModel(buf,fmt,label); gltf.fmt=fmt; gltf.label=label;
       const id='c:'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
       const role=guessRole(f.name);
       registerCustom(id,name,role,gltf,buf,0);
-      idb.put({id,name,role,fix:0,data:buf}); added++; lastId=id;
+      idb.put({id,name,role,fix:0,fmt,label,data:buf}); added++; lastId=id;
     }catch(e){ toast('ما قدرت أفتح «'+f.name+'». جرّب تحمّله مرة ثانية بصيغة GLB.',true); }
   }
   if(added){ sel=lastId; setTool('place'); renderPalette(); toast(added>1?('انضاف '+added+' أشياء لقائمتك'):('انضاف «'+CUSTOM[lastId].name+'». اضغط على الأرض عشان تحطه.')); }
 }
 function deleteCustom(id){
   for(const k in map.objects) if(map.objects[k].t===id) delete map.objects[k];
-  delete CUSTOM[id]; delete ITEMS[id]; delete thumbs[id]; idb.del(id);
+  delete CUSTOM[id]; delete ITEMS[id]; delete thumbs[id];
+  if(id.indexOf('c:r:')===0){ const o=repoOverrides(); o[id]=Object.assign({},o[id],{hidden:true}); try{ localStorage.setItem(REPO_KEY,JSON.stringify(o)); }catch(e){} } else idb.del(id);
   if(sel===id) sel='tree';
   rebuildObjects(); persist(); renderPalette();
 }
@@ -571,12 +600,12 @@ function renderPalette(){
   mine.appendChild(h);
   const g=document.createElement('div'); g.className='items';
   const add=document.createElement('button'); add.className='item add'; add.id='addModel';
-  add.innerHTML='<b>+</b><span>أضف</span>'; add.title='أضف ملف GLB من جهازك';
+  add.innerHTML='<b>+</b><span>أضف</span>'; add.title='أضف ملف GLB أو FBX من جهازك';
   add.onclick=()=>fileIn.click(); g.appendChild(add);
   const ids=Object.keys(CUSTOM);
   ids.forEach(id=>g.appendChild(itemButton(id)));
   mine.appendChild(g);
-  if(!ids.length){ const p=document.createElement('p'); p.className='empty'; p.textContent='حمّل أي شي من poly.pizza بصيغة GLB واضغط «أضف». اضغط «كيف؟» للشرح.'; mine.appendChild(p); }
+  if(!ids.length){ const p=document.createElement('p'); p.className='empty'; p.textContent='حمّل أي شي من poly.pizza (GLB) أو Mixamo (FBX) واضغط «أضف». اضغط «كيف؟» للشرح.'; mine.appendChild(p); }
   if(isCustom(sel) && CUSTOM[sel]){
     const c=CUSTOM[sel], box=document.createElement('div'); box.className='cset';
     const p=document.createElement('p'); p.textContent='«'+c.name+'» في اللعب يكون:'; box.appendChild(p);
@@ -777,8 +806,11 @@ function startPlay(){
     if(c.anims.length){
       const mx=new THREE.AnimationMixer(pg);
       const idle=pickClip(c.anims,['idle','stand','breath']), walk=pickClip(c.anims,['walk','run','move','jog']);
-      const a={mx,idle:mx.clipAction(idle),walk:walk&&walk!==idle?mx.clipAction(walk):null,moving:false};
-      a.idle.play(); if(a.walk){ a.walk.play(); a.walk.setEffectiveWeight(0); }
+      const isWalk=c=>/walk|run|jog|move|sprint/i.test(c.name);
+      let a;
+      if(walk && walk!==idle){ a={mx,idle:mx.clipAction(idle),walk:mx.clipAction(walk),moving:false}; a.idle.play(); a.walk.play(); a.walk.setEffectiveWeight(0); }
+      else if(isWalk(idle)){ a={mx,only:mx.clipAction(idle),walkOnly:true,moving:false}; a.only.play(); a.only.paused=true; }
+      else { a={mx,idle:mx.clipAction(idle),walk:null,moving:false}; a.idle.play(); }
       anim=a;
     }
   } else pg=makePlayer();
@@ -840,7 +872,9 @@ function updatePlay(dt){
       if(p.g.userData.body) p.g.userData.body.position.y=Math.abs(Math.sin(P.t*12))*.06; }
     else if(p.g.userData.body) p.g.userData.body.position.y*=.8;
     if(p.anim){ const mv=!!len;
-      if(p.anim.walk && mv!==p.anim.moving){ p.anim.moving=mv; p.anim.walk.setEffectiveWeight(mv?1:0); p.anim.idle.setEffectiveWeight(mv?0:1); }
+      if(mv!==p.anim.moving){ p.anim.moving=mv;
+        if(p.anim.walk){ p.anim.walk.setEffectiveWeight(mv?1:0); p.anim.idle.setEffectiveWeight(mv?0:1); }
+        else if(p.anim.walkOnly){ p.anim.only.paused=!mv; if(!mv) p.anim.only.time=0; } }
       p.anim.mx.update(dt); }
     else if(!p.g.userData.body && len){ p.g.position.y=Math.abs(Math.sin(P.t*12))*.06; }
     p.g.position.set(p.x,0,p.z);
@@ -901,9 +935,30 @@ requestAnimationFrame(loop);
 /* load models saved earlier in this browser */
 idb.open().then(()=>idb.all()).then(async recs=>{
   let n=0;
-  for(const r of recs){ try{ const gltf=await parseModel(r.data); registerCustom(r.id,r.name,r.role||'block',gltf,r.data,r.fix|0); n++; }catch(e){} }
+  for(const r of recs){ try{ const gltf=await parseModel(r.data,r.fmt||'glb',r.label); gltf.fmt=r.fmt||'glb'; gltf.label=r.label||''; registerCustom(r.id,r.name,r.role||'block',gltf,r.data,r.fix|0); n++; }catch(e){} }
   if(n){ rebuildObjects(); renderPalette(); }
-});
+}).then(loadRepoModels);
+
+/* models listed in models/index.json when this page runs from the GitHub repo */
+async function loadRepoModels(){
+  if(location.protocol!=='https:' && location.protocol!=='http:') return;
+  let list;
+  try{ const r=await fetch('models/index.json',{cache:'no-cache'}); if(!r.ok) return; list=await r.json(); }catch(e){ return; }
+  if(!Array.isArray(list)) return;
+  const ov=repoOverrides(); let n=0;
+  for(const m of list){
+    if(!m || !m.file) continue;
+    const id='c:r:'+m.file, o=ov[id]||{}; if(o.hidden) continue;
+    const fmt=extOf(m.file); if(!fmt) continue;
+    try{
+      const res=await fetch('models/'+encodeURI(m.file)); if(!res.ok) continue;
+      const buf=await res.arrayBuffer(); const label=m.file.replace(/\.(glb|gltf|fbx)$/i,'');
+      const gltf=await parseModel(buf,fmt,label); gltf.fmt=fmt; gltf.label=label;
+      registerCustom(id,m.name||label,o.role||m.role||'block',gltf,buf,o.fix!=null?o.fix:(m.fix|0)); n++;
+    }catch(e){}
+  }
+  if(n){ rebuildObjects(); renderPalette(); }
+}
 })();
 </script>
 
