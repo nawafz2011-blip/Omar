@@ -2478,7 +2478,7 @@ camera3.add(beam);
 const DUSTN = 420, dustGeo = new T3.BufferGeometry(), dustPos = new Float32Array(DUSTN * 3), dustSeed = new Float32Array(DUSTN);
 for (let i = 0; i < DUSTN; i++) { dustPos[i * 3] = Math.random() * 6 - 3; dustPos[i * 3 + 1] = Math.random() * 2.2; dustPos[i * 3 + 2] = Math.random() * 6 - 3; dustSeed[i] = Math.random() * 7; }
 dustGeo.setAttribute('position', new T3.BufferAttribute(dustPos, 3));
-const dust = new T3.Points(dustGeo, new T3.PointsMaterial({ color: 0xd8c8a8, size: .012, transparent: true, opacity: .55, depthWrite: false, blending: T3.AdditiveBlending }));
+const dust = new T3.Points(dustGeo, new T3.PointsMaterial({ color: 0xd8c8a8, size: .008, transparent: true, opacity: .4, depthWrite: false, blending: T3.AdditiveBlending }));
 scene3.add(dust);
 function updateDust(dt) {
   const t = performance.now() / 1000;
@@ -2492,7 +2492,7 @@ function updateDust(dt) {
     if (dustPos[k + 1] < 0) dustPos[k + 1] += 2.2; else if (dustPos[k + 1] > 2.2) dustPos[k + 1] -= 2.2;
   }
   dustGeo.attributes.position.needsUpdate = true;
-  dust.material.opacity = .5 * Math.min(1, lightMul);
+  dust.material.opacity = .32 * Math.min(1, lightMul);
 }
 
 // bloom on lamps, screens and glowing things
@@ -2563,7 +2563,7 @@ function makeGlove(col) {
   return g;
 }
 const gloveBlue = makeGlove('#3a6cf2'), gloveRed = makeGlove('#e2363d');
-gloveRed.scale.x = -1;
+gloveBlue.scale.setScalar(.72); gloveRed.scale.set(-.72, .72, .72);
 sceneH.add(gloveBlue, gloveRed);
 const cableGeo = new T3.CylinderGeometry(.006, .006, 1, 6); cableGeo.translate(0, .5, 0); cableGeo.rotateX(Math.PI / 2);
 const cableB = new T3.Mesh(cableGeo, hmat(0x151820)), cableR = new T3.Mesh(cableGeo, hmat(0x151820));
@@ -2611,7 +2611,7 @@ function updateHands(dt, now) {
     glove.visible = show && (!isRed || S.has.red);
     cable.visible = false;
     if (!glove.visible) return;
-    const base = new T3.Vector3(sx * .2 + bx * (isRed ? -1 : 1), -.2 - by, -.42);
+    const base = new T3.Vector3(sx * .23 + bx * (isRed ? -1 : 1), -.24 - by, -.46);
     let e = 0;
     if (hand && hand.red === isRed) e = Math.sin(Math.PI * hand.t / hand.d);
     const tgt = new T3.Vector3(0, -.02, -1.5);
@@ -2630,7 +2630,7 @@ function updateHands(dt, now) {
   place(gloveRed, cableR, true, 1);
   hFill.intensity = S.carry > 0 ? .8 + Math.random() * .5 : 0;
   catBee.visible = S.catbee && S.phase === 'play' && scareT <= 0;
-  if (catBee.visible) { catBee.position.set(-.13 + bx, -.07 - by, -.42); catBee.rotation.set(.15, .5 + Math.sin(now / 700) * .15, 0); }
+  if (catBee.visible) { catBee.position.set(-.2 + bx, -.12 - by, -.5); catBee.scale.setScalar(.6); catBee.rotation.set(.15, .5 + Math.sin(now / 700) * .15, 0); }
   // pickup pop
   if (pickShow && pickShow.e && S.phase === 'play') {
     if (pickFor !== pickShow) { pickFor = pickShow; buildPickModel(pickShow.e); }
