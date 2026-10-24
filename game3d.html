@@ -369,7 +369,8 @@ let AC = null, master = null, muted = false, noiseBuf = null;
 function audioInit() {
   if (AC) return;
   try {
-    AC = new (window.AudioContext || window.webkitAudioContext)();
+    const ACx = window.AudioContext || window.webkitAudioContext;
+    try { AC = new ACx({ latencyHint: 'interactive' }); } catch (e) { AC = new ACx(); }
     master = AC.createGain(); master.gain.value = 0.6 * settings.vol / 100;
     const comp = AC.createDynamicsCompressor(); master.connect(comp); comp.connect(AC.destination);
     noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
@@ -866,7 +867,7 @@ function startChase() {
   S.chase = true; S.huggy = { x:27.5, y:5.5, path:null, t:0, falling:false, ft:0, wait:1.1, lunge:0, lungeT:4 };
   S.chaseMarks = {}; S.blackout = 0.9;
   checkpoint = { S: JSON.stringify(S), grid: grid.map(r => r.slice()) };
-  sfx.reveal(); scareT = 0.9; shake = 0.6;
+  sfx.reveal(); scareT = 0.9; shake = 0.6; tauntT = 2.5; laughT = 1.2;
   toast('انطفت الأنوار… ولما رجعت، كان واقف وراك. اهرب للفتحة!! (Shift للركض)', 4.5);
 }
 function dropBox() {
@@ -1881,10 +1882,10 @@ function ceilH(tx, ty) {
   if (tx < 0 || ty < 0 || tx >= W || ty >= H) return WH;
   const t = grid[ty][tx];
   if (t === OUT) return 3.6;
-  if (t === VENT) return 0.95;
+  if (t === VENT) return 1.85;
   if (t === BRIDGE || t === ABYSS) return 4.2;
   const d = doorAt[ty * W + tx];
-  if (d) return d.kind === 'vent' ? 0.95 : 1.7;
+  if (d) return d.kind === 'vent' ? 1.85 : 1.7;
   const z = zoneIdx[ty * W + tx];
   if (z === 2 || z === 4) return 3.4;
   if (z === 5) return 2.4;
@@ -2015,6 +2016,16 @@ function buildWorld() {
   root.add(batchMesh(fb, new T3.MeshPhongMaterial({ map: floorTex, shininess: 18, specular: 0x262626 })));
   root.add(batchMesh(cb, new T3.MeshPhongMaterial({ map: (() => { const t = new T3.CanvasTexture(paintCeilCanvas()); t.encoding = T3.sRGBEncoding; return t; })(), shininess: 2 })));
   const pit = new T3.Mesh(new T3.PlaneGeometry(14, 14), basic(0x010102)); pit.rotation.x = -Math.PI / 2; pit.position.set(43, -7, 22); root.add(pit);
+  // pipes and girders down in the pit; Mario hits them on the way down
+  const pipeMat = pm(0x5c4a3c, { shininess: 50, specular: 0x554433 }), girder = pm(0x3a3f4a, { shininess: 30 });
+  const pipe = (x, y, z, len, alongX, r = .11) => { const m = new T3.Mesh(new T3.CylinderGeometry(r, r, len, 14), pipeMat); m.position.set(x, y, z); m.rotation[alongX ? 'z' : 'x'] = Math.PI / 2; root.add(m);
+    for (let i = -1; i <= 1; i += 2) { const f = new T3.Mesh(new T3.CylinderGeometry(r * 1.35, r * 1.35, .06, 14), girder); f.position.set(x + (alongX ? i * len * .3 : 0), y, z + (alongX ? 0 : i * len * .3)); f.rotation[alongX ? 'z' : 'x'] = Math.PI / 2; root.add(f); } };
+  pipe(43, -1.45, 22.6, 3.2, true, .12);
+  pipe(42.55, -2.85, 23, 6, false, .1);
+  pipe(43.45, -4.3, 23.9, 3.2, true, .13);
+  pipe(43, -5.6, 21.4, 3.2, true, .09);
+  [[42.12, 20.15], [43.88, 20.15], [42.12, 25.85], [43.88, 25.85]].forEach(([x, z]) => { const p = new T3.Mesh(new T3.BoxGeometry(.14, 11, .14), girder); p.position.set(x, -1.5, z); root.add(p); });
+  for (let y = -6; y < 0; y += 1.5) { const b = new T3.Mesh(new T3.BoxGeometry(.08, .08, 5.7), girder); b.position.set(42.12, y, 23); root.add(b); const b2 = b.clone(); b2.position.x = 43.88; root.add(b2); }
   // bridge planks, one piece per tile so the broken part can fall
   const bridge = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (grid[y][x] === BRIDGE) {
@@ -2311,6 +2322,37 @@ function onScreen(x, y, z) {
   v3.set(x, y, z); ndc.copy(v3).project(camera3);
   return ndc.z < 1 && Math.abs(ndc.x) < 1 && Math.abs(ndc.y) < 1;
 }
+// Mario's fall: onto the first pipe, bounces to the second, then into the dark
+function fallPose(hg, ft) {
+  const r = mHuggy.root, u = r.userData;
+  if (!u.fall) u.fall = { x: hg.x, z: hg.y, hit: 0 };
+  const f = u.fall, lerp = (a, b, k) => a + (b - a) * k;
+  let x, y, z, rz, rx;
+  if (ft < .5) { const k = ft / .5; x = lerp(f.x, 43, Math.min(1, k * 2)); z = lerp(f.z, 22.6, Math.min(1, k * 2)); y = -1.25 * k * k; rz = k * .9; rx = k * .4; }
+  else if (ft < .95) { const k = (ft - .5) / .45; x = lerp(43, 42.6, k); z = lerp(22.6, 23, k); y = lerp(-1.3, -2.7, k * k) + .35 * Math.sin(k * Math.PI); rz = .9 + k * 1.6; rx = .4 + k * .8; }
+  else { const k = Math.min(1, (ft - .95) / .85); x = lerp(42.6, 43.3, k); z = lerp(23, 23.6, k); y = -2.7 - 6 * k * k; rz = 2.5 + k * 3; rx = 1.2 + k * 2; }
+  r.position.set(x, y, z); r.rotation.z = rz; r.rotation.x = rx;
+  if (f.hit === 0 && ft >= .5) { f.hit = 1; shake = Math.max(shake, .8); metal(.18); tone(70, .4, 'sine', .4, 35); }
+  if (f.hit === 1 && ft >= .95) { f.hit = 2; shake = Math.max(shake, .6); metal(.14); tone(60, .4, 'sine', .3, 30); }
+}
+// what Mario says and does while he chases you
+const TAUNTS = ['وينك رايح؟', 'ما تقدر تهرب', 'تعال هنا', 'أنا وراك', 'Here I come!', 'Let\'s play!', 'هههههه'];
+let tauntT = 3, laughT = 6;
+function laugh(v) {
+  for (let i = 0; i < 6; i++) { const f = 230 - i * 14; tone(f, .11, 'sawtooth', v, f * .8, i * .16, .01); hiss(.09, v * .5, 1100 - i * 40, 800, 4, i * .16, .01); }
+}
+function chaseVoice(dt) {
+  const hg = S.huggy;
+  if (!S.chase || !hg || hg.falling || S.phase !== 'play' || paused) return;
+  const dist = Math.hypot(hg.x - S.px, hg.y - S.py);
+  tauntT -= dt; laughT -= dt;
+  if (tauntT <= 0 && hg.wait <= 0) {
+    tauntT = 4.5 + Math.random() * 3.5;
+    const tx = TAUNTS[Math.random() * TAUNTS.length | 0];
+    say(tx, { pitch: .25, rate: .78, lang: /[a-z]/i.test(tx) ? 'en-US' : 'ar-SA', minMs: 800 });
+  }
+  if (laughT <= 0) { laughT = 7 + Math.random() * 5; laugh(Math.min(.12, .9 / (dist + 2))); }
+}
 function updateWorld3(dt, now) {
   const t = now / 1000;
   // doors
@@ -2353,14 +2395,13 @@ function updateWorld3(dt, now) {
     mHuggy.root.rotation.y = ry + dyaw * Math.min(1, dt * 10);
     const inVent = grid[Math.floor(hg.y)] && (grid[Math.floor(hg.y)][Math.floor(hg.x)] === VENT || (doorAt[Math.floor(hg.y) * W + Math.floor(hg.x)] || {}).kind === 'vent');
     const ft = hg.falling ? hg.ft : 0;
-    mHuggy.root.position.set(hg.x, -ft * ft * 3, hg.y);
+    mHuggy.root.position.set(hg.x, 0, hg.y);
+    if (hg.falling) fallPose(hg, ft);
     // squeezes down and crawls through the vents
-    mHuggy.root.rotation.x = inVent ? 1.15 : 0;
-    if (inVent) mHuggy.root.position.y += .12;
+    mHuggy.root.rotation.x = 0;
     const mode = hg.falling || hg.wait > 0 ? 'open' : 'run';
     poseMario(mHuggy, mode, t * (hg.lunge > 0 ? 1.5 : 1));
-    if (hg.falling) mHuggy.root.rotation.z = ft * 2;
-    else mHuggy.root.rotation.z = 0;
+    if (!hg.falling) { mHuggy.root.rotation.z = 0; mHuggy.root.userData.fall = null; }
   }
   // what is on screen (drives the sight stings)
   for (const k in seenNow) delete seenNow[k];
@@ -2388,7 +2429,7 @@ function render3(dt, now) {
   const tile = grid[Math.floor(S.py)] ? grid[Math.floor(S.py)][Math.floor(S.px)] : FLOOR;
   const dd = doorAt[Math.floor(S.py) * W + Math.floor(S.px)];
   const low = tile === VENT || (dd && dd.kind === 'vent');
-  eyeH += ((low ? .5 : .85) - eyeH) * Math.min(1, dt * 8);
+  eyeH += (.85 - eyeH) * Math.min(1, dt * 8);
   let shx = 0, shy = 0;
   if (shake > 0 && !reduceMotion) { shx = (Math.random() - .5) * .06 * shake; shy = (Math.random() - .5) * .06 * shake; }
   const bob = reduceMotion ? 0 : Math.sin(bobT) * .025;
@@ -2451,6 +2492,7 @@ const settings = Object.assign({ music: true, vol: 80, sens: 100, quality: 'high
 function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) {} }
 function applyVolume() { if (master) master.gain.value = muted ? 0 : 0.6 * settings.vol / 100; }
 let paused = false;
+['keydown', 'pointerdown'].forEach(ev => addEventListener(ev, () => { try { if (AC && AC.state === 'suspended') AC.resume(); } catch (e) {} }, true));
 
 // ---------- renderer quality ----------
 renderer3.outputEncoding = T3.sRGBEncoding;
@@ -2470,7 +2512,7 @@ lampShadow.shadow.camera.near = .1;
 
 // soft visible beam in front of the torch
 const beamTex = (() => { const c = document.createElement('canvas'); c.width = 4; c.height = 128; const g = c.getContext('2d'); const gr = g.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, 'rgba(255,240,215,0)'); gr.addColorStop(.85, 'rgba(255,240,215,.55)'); gr.addColorStop(1, 'rgba(255,240,215,.9)'); g.fillStyle = gr; g.fillRect(0, 0, 4, 128); return new T3.CanvasTexture(c); })();
-const beam = new T3.Mesh(new T3.ConeGeometry(1.5, 5, 24, 1, true), new T3.MeshBasicMaterial({ map: beamTex, transparent: true, opacity: .045, blending: T3.AdditiveBlending, depthWrite: false, side: T3.DoubleSide, fog: false }));
+const beam = new T3.Mesh(new T3.ConeGeometry(1.5, 5, 24, 1, true), new T3.MeshBasicMaterial({ map: beamTex, transparent: true, opacity: .018, blending: T3.AdditiveBlending, depthWrite: false, side: T3.DoubleSide, fog: false }));
 beam.rotation.x = Math.PI / 2; beam.position.set(.3, -.24, -2.4);
 camera3.add(beam);
 
@@ -2519,7 +2561,7 @@ function applyQuality() {
   const sh = q !== 'low';
   if (renderer3.shadowMap.enabled !== sh) { renderer3.shadowMap.enabled = sh; scene3.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.needsUpdate = true); }); }
   torch.castShadow = sh;
-  lampShadow.castShadow = q === 'high';
+  lampShadow.castShadow = false;
   beam.visible = q !== 'low';
   dust.visible = q !== 'low';
   if (q === 'high') makeComposer();
@@ -2690,6 +2732,7 @@ let lastR = performance.now();
 function render() {
   const now = performance.now(), dt = Math.min(.05, (now - lastR) / 1000); lastR = now;
   render3(dt, now);
+  chaseVoice(dt);
   renderer3.toneMappingExposure = 1.15 * settings.bright / 100;
   if (dust.visible) updateDust(dt);
   updateHands(dt, now);
