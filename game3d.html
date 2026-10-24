@@ -364,7 +364,9 @@ let grid = makeGrid();
 let checkpoint = null;
 
 // ---------- audio ----------
-let AC = null, master = null, muted = false, noiseBuf = null;
+let AC = null, master = null, muted = false, noiseBuf = null, sndBus = null, marioPan = null, reverbGain = null, humGain = null;
+const bus = () => sndBus || master;
+function atMario(fn) { const prev = sndBus; if (marioPan) sndBus = marioPan; try { fn(); } finally { sndBus = prev; } }
 function audioInit() {
   if (AC) return;
   try {
@@ -372,6 +374,14 @@ function audioInit() {
     try { AC = new ACx({ latencyHint: 'interactive' }); } catch (e) { AC = new ACx(); }
     master = AC.createGain(); master.gain.value = 0.6 * settings.vol / 100;
     const comp = AC.createDynamicsCompressor(); master.connect(comp); comp.connect(AC.destination);
+    // factory echo: a long noisy impulse on a send
+    try {
+      const len = AC.sampleRate * 2.6, ir = AC.createBuffer(2, len, AC.sampleRate);
+      for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2); }
+      const conv = AC.createConvolver(); conv.buffer = ir; reverbGain = AC.createGain(); reverbGain.gain.value = .32;
+      master.connect(conv); conv.connect(reverbGain); reverbGain.connect(comp);
+    } catch (e) {}
+    try { marioPan = AC.createStereoPanner(); marioPan.connect(master); } catch (e) { marioPan = null; }
     noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
     const ch = noiseBuf.getChannelData(0);
     for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
@@ -379,7 +389,7 @@ function audioInit() {
     const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 160;
     const lfo = AC.createOscillator(), lfoG = AC.createGain();
     lfo.frequency.value = 0.07; lfoG.gain.value = 70; lfo.connect(lfoG); lfoG.connect(lp.frequency); lfo.start();
-    const dg = AC.createGain(); dg.gain.value = 0.06; lp.connect(dg); dg.connect(master);
+    const dg = AC.createGain(); dg.gain.value = settings.music ? 0.06 : 0; humGain = dg; lp.connect(dg); dg.connect(master);
     [41.2, 41.7, 61.7].forEach(f => { const o = AC.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.connect(lp); o.start(); });
     // air moving through empty halls
     const n = AC.createBufferSource(); n.buffer = noiseBuf; n.loop = true;
@@ -397,7 +407,7 @@ function tone(f, d, type = 'sine', v = 0.15, slide, delay = 0, attack = 0.005) {
     o.type = type; o.frequency.setValueAtTime(f, t);
     if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + attack + d);
     env(g, t, attack, d, v);
-    o.connect(g); g.connect(master); o.start(t); o.stop(t + attack + d + 0.05);
+    o.connect(g); g.connect(bus()); o.start(t); o.stop(t + attack + d + 0.05);
   } catch (e) {}
 }
 function hiss(d, v, f0, f1, q = 1, delay = 0, attack = 0.005) {
@@ -408,7 +418,7 @@ function hiss(d, v, f0, f1, q = 1, delay = 0, attack = 0.005) {
     fl.frequency.setValueAtTime(f0, t);
     if (f1) fl.frequency.exponentialRampToValueAtTime(f1, t + attack + d);
     env(g, t, attack, d, v);
-    src.connect(fl); fl.connect(g); g.connect(master); src.start(t, Math.random()); src.stop(t + attack + d + 0.05);
+    src.connect(fl); fl.connect(g); g.connect(bus()); src.start(t, Math.random()); src.stop(t + attack + d + 0.05);
   } catch (e) {}
 }
 // throaty growl: low saw with a fast wobble through a resonant lowpass, plus breath
@@ -421,7 +431,7 @@ function growl(d = 1.2, v = 0.25, f = 70, slide) {
     w.frequency.value = 23 + Math.random() * 8; wg.gain.value = f * 0.35; w.connect(wg); wg.connect(o.frequency);
     fl.type = 'lowpass'; fl.frequency.value = 700; fl.Q.value = 4;
     env(g, t, 0.08, d, v);
-    o.connect(fl); fl.connect(g); g.connect(master);
+    o.connect(fl); fl.connect(g); g.connect(bus());
     o.start(t); w.start(t); o.stop(t + d + 0.2); w.stop(t + d + 0.2);
     hiss(d, v * 0.5, 350, 220, 3, 0, 0.08);
   } catch (e) {}
@@ -440,6 +450,7 @@ function scream(v = 0.22) {
 // a slightly detuned, slowing music box in a minor key
 const BOX_TUNE = [659, 587, 523, 494, 523, 440, 415, 440, 0, 659, 698, 659, 587, 523, 494, 330];
 function musicBox() {
+  if (!settings.music) return;
   BOX_TUNE.forEach((f, i) => {
     if (!f) return;
     const df = f * (1 + (Math.random() - 0.5) * 0.012) * (1 - i * 0.004), d = i * 0.38 + i * i * 0.004;
@@ -452,7 +463,7 @@ const sfx = {
   buzz: () => tone(110, .35, 'sawtooth', .12, 70),
   zap:  () => { clip('spark', .9); hiss(.4, .25, 4000, 800, .8); tone(1400, .25, 'sawtooth', .1, 90); tone(55, .9, 'square', .12, 30); },
   open: () => { tone(140, .7, 'sawtooth', .07, 90, 0, .05); hiss(.6, .08, 600, 300, 4, 0, .05); metal(.05, .5); },
-  sting:() => { [220, 233, 311].forEach(f => tone(f, 2.4, 'sawtooth', .07, f * .5, 0, .05)); hiss(2, .08, 5000, 400, 2, 0, .3); },
+  sting:() => { if (!settings.music) { hiss(1.2, .07, 3000, 600, 2); return; } [220, 233, 311].forEach(f => tone(f, 2.4, 'sawtooth', .07, f * .5, 0, .05)); hiss(2, .08, 5000, 400, 2, 0, .3); },
   thump:() => tone(58, .18, 'sine', .45, 38),
   step: (v, delay = 0) => { tone(70, .22, 'sine', v, 35, delay); hiss(.12, v * .4, 300, 120, 1, delay); },
   crash:() => { hiss(1.8, .4, 1500, 80, .6); tone(80, 1.6, 'sawtooth', .2, 25); metal(.15); metal(.12, .3); },
@@ -528,6 +539,7 @@ const CHASE_ROOTS = [55, 43.65, 49, 41.2];
 function progress() { return Math.min(1, (Object.values(S.doors).filter(Boolean).length + (S.powerFixed ? 1 : 0) + (S.has.red ? 1 : 0)) / 10); }
 function musicTick() {
   if (!AC) return;
+  if (humGain) humGain.gain.value = settings.music ? 0.06 : 0;
   if (!settings.music) { setMusic(''); musicMode = 'none'; return; }
   let m = '';
   if (S.phase === 'ending') m = 'ending';
@@ -591,6 +603,7 @@ const hush = () => { try { window.speechSynthesis && window.speechSynthesis.canc
 try { window.speechSynthesis && window.speechSynthesis.getVoices(); } catch (e) {}
 // the moment he comes into view: screeching strings, a sub boom and a breathy whisper
 function sightSting(v) {
+  if (!settings.music) { tone(46, 1.2, 'sine', v * .8, 30); hiss(.9, v * .3, 5000, 1500, .6); return; }
   [1180, 1250, 1410, 1660].forEach((f, i) => tone(f, 1.4, 'sawtooth', v * .12, f * 0.92, i * .015, .01));
   tone(46, 2.2, 'sine', v * 1.4, 30, 0, .005);
   hiss(1.6, v * .5, 6000, 1500, .6, 0, .01);
@@ -870,6 +883,7 @@ function startChase() {
   toast('انطفت الأنوار… ولما رجعت، كان واقف وراك. اهرب للفتحة!! (Shift للركض)', 4.5);
 }
 function dropBox() {
+  hiss(.25, .35, 6000, 1500, .7); tone(110, .3, 'sawtooth', .18, 40); hiss(1.4, .15, 900, 200, 1, .25); creak(.18);
   S.boxDropped = true; S.chase = false;
   for (let y = 21; y <= 24; y++) grid[y][43] = ABYSS;
   if (S.huggy) { S.huggy.falling = true; S.huggy.ft = 0; }
@@ -1003,7 +1017,7 @@ function update(dt) {
       // he pauses after the reveal, then hunts; every few seconds he lunges with a roar
       if (hg.wait > 0) hg.wait -= dt;
       hg.lungeT -= dt;
-      if (hg.lungeT <= 0 && hg.wait <= 0 && dist0 < 8) { hg.lunge = 0.9; hg.lungeT = 4 + Math.random() * 2.5; growl(1.1, .4, 95, 45); shake = Math.max(shake, .5); }
+      if (hg.lungeT <= 0 && hg.wait <= 0 && dist0 < 8) { hg.lunge = 0.9; hg.lungeT = 4 + Math.random() * 2.5; atMario(() => { growl(1.1, .4, 95, 45); hiss(.6, .14, 400, 2400, 1.2); }); shake = Math.max(shake, .5); }
       hg.lunge = Math.max(0, hg.lunge - dt);
       const hgSpeed = hg.wait > 0 ? 0 : hg.lunge > 0 ? 5.3 : 3.75;
       const dx = hg.path.x - hg.x, dy = hg.path.y - hg.y, d = Math.hypot(dx, dy), sp = hgSpeed * dt;
@@ -1024,16 +1038,16 @@ function update(dt) {
       stepT -= dt;
       if (stepT <= 0 && hgSpeed > 0) {
         const v = Math.min(0.55, 2.4 / (dist + 1));
-        if (grid[Math.floor(hg.y)][Math.floor(hg.x)] === VENT) { metal(v * .35); tone(70, .18, 'square', v * .4, 40); } else sfx.step(v);
+        atMario(() => { if (grid[Math.floor(hg.y)][Math.floor(hg.x)] === VENT) { metal(v * .35); tone(70, .18, 'square', v * .4, 40); } else { sfx.step(v); tone(42, .25, 'sine', v * .6, 28); } });
         if (dist < 6) shake = Math.max(shake, 0.35 * (1 - dist / 6));
         stepT = hg.lunge > 0 ? 0.2 : 0.32;
       }
       breathT -= dt;
-      if (breathT <= 0) { breath(Math.min(0.2, 1.6 / (dist + 2))); breathT = 2.2; }
+      if (breathT <= 0) { atMario(() => breath(Math.min(0.2, 1.6 / (dist + 2)))); breathT = 2.2; }
       grindT -= dt;
-      if (grindT <= 0 && dist < 7) { grind(Math.min(0.12, 0.8 / (dist + 1))); grindT = 3 + Math.random() * 3; }
+      if (grindT <= 0 && dist < 7) { atMario(() => grind(Math.min(0.12, 0.8 / (dist + 1)))); grindT = 3 + Math.random() * 3; }
       growlT -= dt;
-      if (growlT <= 0) { sfx.growl(1, Math.min(0.35, 2.5 / (dist + 2)), 60 + Math.random() * 30); growlT = 2 + Math.random() * 2.5; }
+      if (growlT <= 0) { atMario(() => sfx.growl(1, Math.min(0.35, 2.5 / (dist + 2)), 60 + Math.random() * 30)); growlT = 2 + Math.random() * 2.5; }
       if (dist < 0.6) { S.phase = 'caught'; scareT = 1.6; sfx.jump(); }
     }
   }
@@ -2335,8 +2349,9 @@ function fallPose(hg, ft) {
   else if (ft < .95) { const k = (ft - .5) / .45; x = lerp(43, 42.6, k); z = lerp(22.6, 23, k); y = lerp(-1.3, -2.7, k * k) + .35 * Math.sin(k * Math.PI); rz = .9 + k * 1.6; rx = .4 + k * .8; }
   else { const k = Math.min(1, (ft - .95) / 1.7); x = lerp(42.6, 43.3, k); z = lerp(23, 23.6, k); y = -2.7 - 6 * k * k; rz = 2.5 + k * 3; rx = 1.2 + k * 2; }
   r.position.set(x, y, z); r.rotation.z = rz; r.rotation.x = rx;
-  if (f.hit === 0 && ft >= .5) { f.hit = 1; shake = Math.max(shake, .8); metal(.18); tone(70, .4, 'sine', .4, 35); }
-  if (f.hit === 1 && ft >= .95) { f.hit = 2; shake = Math.max(shake, .6); metal(.14); tone(60, .4, 'sine', .3, 30); }
+  if (f.hit === 0 && ft >= .5) { f.hit = 1; shake = Math.max(shake, .8); metal(.22); tone(70, .4, 'sine', .45, 35); hiss(.3, .2, 3000, 800, 1); }
+  if (f.hit === 1 && ft >= .95) { f.hit = 2; shake = Math.max(shake, .6); metal(.18); tone(60, .4, 'sine', .35, 30); hiss(.25, .15, 2500, 700, 1); }
+  if (f.hit === 2 && ft >= 2.2) { f.hit = 3; tone(38, 1.2, 'sine', .35, 22); hiss(1, .1, 400, 120, 1); }
 }
 // what Mario says and does while he chases you
 const TAUNTS = ['وينك رايح؟', 'ما تقدر تهرب', 'تعال هنا', 'أنا وراك', 'Here I come!', 'Let\'s play!', 'هههههه'];
@@ -2346,6 +2361,11 @@ function laugh(v) {
 }
 function chaseVoice(dt) {
   const hg = S.huggy;
+  if (marioPan && hg) {
+    const dx = hg.x - S.px, dy = hg.y - S.py, l = Math.hypot(dx, dy) || 1;
+    const pan = Math.max(-1, Math.min(1, (dx / l) * -Math.sin(S.dir) + (dy / l) * Math.cos(S.dir)));
+    try { marioPan.pan.setTargetAtTime(pan * .85, AC.currentTime, .05); } catch (e) {}
+  }
   if (!S.chase || !hg || hg.falling || S.phase !== 'play' || paused) return;
   const dist = Math.hypot(hg.x - S.px, hg.y - S.py);
   tauntT -= dt; laughT -= dt;
@@ -2354,7 +2374,7 @@ function chaseVoice(dt) {
     const tx = TAUNTS[Math.random() * TAUNTS.length | 0];
     say(tx, { pitch: .25, rate: .78, lang: /[a-z]/i.test(tx) ? 'en-US' : 'ar-SA', minMs: 800 });
   }
-  if (laughT <= 0) { laughT = 7 + Math.random() * 5; laugh(Math.min(.12, .9 / (dist + 2))); }
+  if (laughT <= 0) { laughT = 7 + Math.random() * 5; atMario(() => laugh(Math.min(.12, .9 / (dist + 2)))); }
 }
 function updateWorld3(dt, now) {
   const t = now / 1000;
@@ -2419,6 +2439,7 @@ function updateWorld3(dt, now) {
 
 let cut = null, cutOn = false;
 const lerpN = (a, b, k) => a + (b - a) * k;
+const fallLight = new T3.PointLight(0xffa070, 0, 4, 1.4); scene3.add(fallLight);
 const playerBody = new T3.Group(); playerBody.visible = false; scene3.add(playerBody);
 glbLoad('guy', sc => { const m = glbFit(sc, { h: 1.5 }); m.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; }); playerBody.add(m); });
 function render3(dt, now) {
@@ -2452,17 +2473,20 @@ function render3(dt, now) {
   playerBody.visible = cutOn;
   if (cut) {
     cut.t += dt;
-    const k = Math.min(1, cut.t / .45), ease = k * k * (3 - 2 * k);
-    let dx = S.px - cut.mx, dz = S.py - cut.my; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
-    const cx = S.px + dx * 1.15, cz = S.py + dz * 1.15;
-    camera3.position.set(lerpN(S.px, cx, ease), lerpN(eyeH, 1.6, ease), lerpN(S.py, cz, ease));
-    const mp = mHuggy.root.visible ? mHuggy.root.position : new T3.Vector3(43.3, -8, 23.6);
-    const look = new T3.Vector3(mp.x, mp.y + .6, mp.z);
-    const q0 = camera3.quaternion.clone(); camera3.lookAt(look); const q1 = camera3.quaternion.clone();
+    const k = Math.min(1, cut.t / .5), ease = k * k * (3 - 2 * k);
+    const mp = mHuggy.root.visible ? mHuggy.root.position : (cut.last || new T3.Vector3(43.3, -8, 23.6));
+    if (mHuggy.root.visible) cut.last = mp.clone();
+    // a camera hanging in the pit just above and beside him, dropping with him
+    const want = new T3.Vector3(Math.min(44.6, mp.x + .95), Math.max(-7.2, mp.y + 1.35), Math.min(25.6, mp.z + 1.05));
+    if (!cut.cam) cut.cam = want.clone();
+    cut.cam.lerp(want, Math.min(1, dt * 7));
+    camera3.position.set(lerpN(S.px, cut.cam.x, ease), lerpN(eyeH, cut.cam.y, ease), lerpN(S.py, cut.cam.z, ease));
+    const q0 = camera3.quaternion.clone(); camera3.lookAt(mp.x, mp.y + .7, mp.z); const q1 = camera3.quaternion.clone();
     camera3.quaternion.copy(q0).slerp(q1, ease);
+    fallLight.position.set(mp.x, mp.y + 1.1, mp.z + .4); fallLight.intensity = 1.6;
     playerBody.position.set(S.px, 0, S.py);
-    playerBody.rotation.y = Math.atan2(-dx, -dz);
-  }
+    playerBody.rotation.y = Math.atan2(cut.mx - S.px, cut.my - S.py);
+  } else fallLight.intensity = 0;
 
   // light
   const outdoors = tile === OUT;
