@@ -2236,8 +2236,12 @@ MODELS.btn = (e, g) => {
   let caps = [];
   glbLoad('button', sc => {
     const m = glbFit(sc, { w: .32 }); m.position.y = .75; m.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } }); g.add(m);
-    m.traverse(o => { if (o.isMesh && /F44336/i.test(o.material.name || '')) { o.material.color.copy(col); caps.push(o.material); } });
-    if (!caps.length) m.traverse(o => { if (o.isMesh) { o.material.color.lerp(col, .8); caps.push(o.material); } });
+    m.traverse(o => {
+      if (!o.isMesh) return;
+      const c = o.material.color, red = /F44336/i.test(o.material.name || '') || (c && c.r > .5 && c.g < .3 && c.b < .3);
+      if (red) { o.material = new T3.MeshPhongMaterial({ color: lin(BTN_COLORS[e.color]), shininess: 70, specular: 0x444444, emissive: lin(BTN_COLORS[e.color]), emissiveIntensity: .12 }); caps.push(o.material); }
+      else o.material = new T3.MeshPhongMaterial({ color: lin('#2a3238'), shininess: 30 });
+    });
   });
   return () => {
     const on = S.code.includes(e.color) || S.doors.A; ring.visible = on;
@@ -2689,8 +2693,8 @@ function updateHands(dt, now) {
     glove.visible = launcher.visible = show && (!isRed || S.has.red) && !cutOn;
     cable.visible = false;
     if (!glove.visible) return;
-    const base = new T3.Vector3(sx * .21 + bx * (isRed ? -1 : 1), -.27 - by, -.44);
-    launcher.position.copy(base); launcher.rotation.set(-.1, sx * -.2, 0);
+    const base = new T3.Vector3(sx * .21 + bx * (isRed ? -1 : 1), -.23 - by, -.46);
+    launcher.position.copy(base); launcher.rotation.set(.35, sx * -.22, 0);
     const home = base.clone().add(new T3.Vector3(sx * .015, .04, -.02));
     let e = 0;
     if (hand && hand.red === isRed) e = Math.sin(Math.PI * hand.t / hand.d);
