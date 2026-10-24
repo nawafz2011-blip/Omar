@@ -2477,7 +2477,7 @@ function render3(dt, now) {
     const mp = mHuggy.root.visible ? mHuggy.root.position : (cut.last || new T3.Vector3(43.3, -8, 23.6));
     if (mHuggy.root.visible) cut.last = mp.clone();
     // a camera hanging in the pit just above and beside him, dropping with him
-    const want = new T3.Vector3(Math.min(44.6, mp.x + .95), Math.max(-7.2, mp.y + 1.35), Math.min(25.6, mp.z + 1.05));
+    const want = new T3.Vector3(44.55, Math.max(-4.2, Math.min(1.4, mp.y + 2.4)), 25.55);
     if (!cut.cam) cut.cam = want.clone();
     cut.cam.lerp(want, Math.min(1, dt * 7));
     camera3.position.set(lerpN(S.px, cut.cam.x, ease), lerpN(eyeH, cut.cam.y, ease), lerpN(S.py, cut.cam.z, ease));
