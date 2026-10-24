@@ -306,7 +306,6 @@ const ENTS = [
   { id:'train', type:'glb', model:'train', x:25, y:13, deco:true, fit:{ w:.75 }, ride:[25.5, 35.5, 13.5] },
   { id:'train2', type:'glb', model:'train', x:28, y:4, deco:true, fit:{ w:.75 }, ride:[28.5, 37.5, 4.5] },
   { id:'desk', type:'glb', model:'desk', x:14, y:25, deco:true, solid:true, fit:{ h:.8, w:1 }, yaw:Math.PI / 2 },
-  { id:'guy', type:'glb', model:'guy', x:15, y:32, deco:true, solid:true, fit:{ h:1.55 }, yaw:Math.PI * .75 },
   { id:'crt1', type:'crt', x:15, y:22, deco:true, solid:true },
   { id:'vhs', type:'vhs', x:17, y:22, deco:true, solid:true },
   { id:'panel', type:'panel', x:18, y:24, deco:true, solid:true },
@@ -992,7 +991,7 @@ function update(dt) {
   if (hg) {
     if (hg.falling) {
       hg.ft += dt;
-      if (hg.ft > 1.8) S.huggy = null;
+      if (hg.ft > 2.7) S.huggy = null;
     } else if (S.chase) {
       hg.t -= dt;
       const reached = hg.path && Math.hypot(hg.path.x - hg.x, hg.path.y - hg.y) < 0.06;
@@ -2330,7 +2329,7 @@ function fallPose(hg, ft) {
   let x, y, z, rz, rx;
   if (ft < .5) { const k = ft / .5; x = lerp(f.x, 43, Math.min(1, k * 2)); z = lerp(f.z, 22.6, Math.min(1, k * 2)); y = -1.25 * k * k; rz = k * .9; rx = k * .4; }
   else if (ft < .95) { const k = (ft - .5) / .45; x = lerp(43, 42.6, k); z = lerp(22.6, 23, k); y = lerp(-1.3, -2.7, k * k) + .35 * Math.sin(k * Math.PI); rz = .9 + k * 1.6; rx = .4 + k * .8; }
-  else { const k = Math.min(1, (ft - .95) / .85); x = lerp(42.6, 43.3, k); z = lerp(23, 23.6, k); y = -2.7 - 6 * k * k; rz = 2.5 + k * 3; rx = 1.2 + k * 2; }
+  else { const k = Math.min(1, (ft - .95) / 1.7); x = lerp(42.6, 43.3, k); z = lerp(23, 23.6, k); y = -2.7 - 6 * k * k; rz = 2.5 + k * 3; rx = 1.2 + k * 2; }
   r.position.set(x, y, z); r.rotation.z = rz; r.rotation.x = rx;
   if (f.hit === 0 && ft >= .5) { f.hit = 1; shake = Math.max(shake, .8); metal(.18); tone(70, .4, 'sine', .4, 35); }
   if (f.hit === 1 && ft >= .95) { f.hit = 2; shake = Math.max(shake, .6); metal(.14); tone(60, .4, 'sine', .3, 30); }
@@ -2414,6 +2413,10 @@ function updateWorld3(dt, now) {
   if (hg && !hg.falling) look('huggy', hg.x, 1.1, hg.y, hg.x, hg.y);
 }
 
+let cut = null, cutOn = false;
+const lerpN = (a, b, k) => a + (b - a) * k;
+const playerBody = new T3.Group(); playerBody.visible = false; scene3.add(playerBody);
+glbLoad('guy', sc => { const m = glbFit(sc, { h: 1.5 }); m.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; }); playerBody.add(m); });
 function render3(dt, now) {
   const ending = S.phase === 'ending';
   const pz = zoneIdx[Math.floor(S.py) * W + Math.floor(S.px)];
@@ -2437,6 +2440,25 @@ function render3(dt, now) {
   camera3.rotation.y = Math.atan2(-Math.cos(S.dir), -Math.sin(S.dir));
   camera3.rotation.x = pitch * 1.25;
   camera3.rotation.z = shx * 2;
+  // when Mario falls: step back, show yourself at the edge and watch him go down
+  const hgc = S.huggy;
+  if (hgc && hgc.falling) { if (!cut) cut = { t: 0, mx: hgc.x, my: hgc.y }; cut.end = now + 900; }
+  if (cut && now > cut.end) cut = null;
+  cutOn = !!cut;
+  playerBody.visible = cutOn;
+  if (cut) {
+    cut.t += dt;
+    const k = Math.min(1, cut.t / .45), ease = k * k * (3 - 2 * k);
+    let dx = S.px - cut.mx, dz = S.py - cut.my; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
+    const cx = S.px + dx * 1.15, cz = S.py + dz * 1.15;
+    camera3.position.set(lerpN(S.px, cx, ease), lerpN(eyeH, 1.6, ease), lerpN(S.py, cz, ease));
+    const mp = mHuggy.root.visible ? mHuggy.root.position : new T3.Vector3(43.3, -8, 23.6);
+    const look = new T3.Vector3(mp.x, mp.y + .6, mp.z);
+    const q0 = camera3.quaternion.clone(); camera3.lookAt(look); const q1 = camera3.quaternion.clone();
+    camera3.quaternion.copy(q0).slerp(q1, ease);
+    playerBody.position.set(S.px, 0, S.py);
+    playerBody.rotation.y = Math.atan2(-dx, -dz);
+  }
 
   // light
   const outdoors = tile === OUT;
@@ -2583,30 +2605,44 @@ const hKey = new T3.DirectionalLight(0xfff0d8, .8); hKey.position.set(.6, 1, .8)
 const hFill = new T3.PointLight(0xffd23a, 0, 1.2, 1.5); hFill.position.set(.25, -.1, -.4); sceneH.add(hFill);
 function lin(c) { return new T3.Color(c).convertSRGBToLinear(); }
 function hmat(c, o) { return new T3.MeshPhongMaterial(Object.assign({ color: lin(c), shininess: 40, specular: 0x333333 }, o || {})); }
+// GrabPack: a coloured mechanical hand that sits on the front of a yellow launcher tube
 function makeGlove(col) {
-  const g = new T3.Group(), skin = hmat(col), metal = hmat(0x3a3f4a, { shininess: 80, specular: 0x777777 }), dark = hmat(0x15171c);
-  // cuff
-  const cuff = new T3.Mesh(new T3.CylinderGeometry(.05, .058, .2, 18), metal); cuff.rotation.x = Math.PI / 2; cuff.position.z = .15; g.add(cuff);
-  const ring = new T3.Mesh(new T3.TorusGeometry(.052, .008, 8, 22), dark); ring.position.z = .06; g.add(ring);
-  for (let i = 0; i < 3; i++) { const r = new T3.Mesh(new T3.SphereGeometry(.007, 6, 5), hmat(0x9aa2b0)); const a = -.6 + i * .6; r.position.set(Math.sin(a) * .053, Math.cos(a) * .053, .1); g.add(r); }
-  // palm
-  const palm = new T3.Mesh(new T3.SphereGeometry(.06, 20, 16), skin); palm.scale.set(1, 1.08, .55); palm.position.set(0, .035, 0); g.add(palm);
-  const fingerGeo = new T3.CylinderGeometry(.0135, .015, .075, 10), tipGeo = new T3.SphereGeometry(.0135, 10, 8);
-  [[-.039, -.18], [-.013, -.05], [.013, .05], [.039, .18]].forEach(([x, a], i) => {
-    const f = new T3.Group(); f.position.set(x, .09, 0); f.rotation.z = -a * .7; g.add(f);
-    const len = i === 0 || i === 3 ? .062 : .075;
-    const c = new T3.Mesh(fingerGeo, skin); c.scale.y = len / .075; c.position.y = len / 2; f.add(c);
-    const tip = new T3.Mesh(tipGeo, skin); tip.position.y = len; f.add(tip);
+  const g = new T3.Group(), skin = hmat(col, { shininess: 55, specular: 0x444444 }), joint = hmat(new T3.Color(col).multiplyScalar(.6).getHex(), { shininess: 30 }), metal = hmat(0x4a505c, { shininess: 80, specular: 0x777777 });
+  const palm = new T3.Mesh(new T3.BoxGeometry(.11, .1, .04), skin); palm.position.y = .03; g.add(palm);
+  const back = new T3.Mesh(new T3.BoxGeometry(.1, .03, .046), joint); back.position.y = .075; g.add(back);
+  const segGeo = new T3.CylinderGeometry(.0125, .0135, 1, 10), jGeo = new T3.SphereGeometry(.0145, 10, 8);
+  [-.039, -.013, .013, .039].forEach((x, i) => {
+    const lens = i === 0 ? [.028, .022, .018] : i === 3 ? [.026, .02, .016] : [.034, .028, .022];
+    let parent = new T3.Group(); parent.position.set(x, .088, 0); parent.rotation.z = -x * 1.6; g.add(parent);
+    lens.forEach((L, k) => {
+      const j = new T3.Mesh(jGeo, joint); parent.add(j);
+      const sg = new T3.Mesh(segGeo, skin); sg.scale.y = L; sg.position.y = L / 2; parent.add(sg);
+      const next = new T3.Group(); next.position.y = L; next.rotation.x = -.12; parent.add(next); parent = next;
+    });
+    const tip = new T3.Mesh(jGeo, skin); parent.add(tip);
   });
-  const th = new T3.Group(); th.position.set(-.055, .02, .005); th.rotation.z = .95; g.add(th);
-  const tc = new T3.Mesh(fingerGeo, skin); tc.scale.y = .8; tc.position.y = .03; th.add(tc);
-  const tt = new T3.Mesh(tipGeo, skin); tt.position.y = .06; th.add(tt);
+  let th = new T3.Group(); th.position.set(-.06, .02, .005); th.rotation.z = 1.05; g.add(th);
+  [.03, .024].forEach(L => { th.add(new T3.Mesh(jGeo, joint)); const sg = new T3.Mesh(segGeo, skin); sg.scale.y = L; sg.position.y = L / 2; th.add(sg); const n = new T3.Group(); n.position.y = L; n.rotation.z = -.25; th.add(n); th = n; });
+  th.add(new T3.Mesh(jGeo, skin));
+  const wrist = new T3.Mesh(new T3.CylinderGeometry(.036, .04, .035, 16), metal); wrist.position.y = -.035; g.add(wrist);
   g.userData.skin = skin;
   return g;
 }
+function makeLauncher() {
+  const g = new T3.Group(), yel = hmat('#e8b83a', { shininess: 60, specular: 0x665522 }), teal = hmat('#3fa7a8', { shininess: 70 }), grey = hmat('#59606c', { shininess: 70, specular: 0x777777 }), dark = hmat('#20232a');
+  const body = new T3.Mesh(new T3.CylinderGeometry(.036, .04, .3, 20), yel); body.rotation.x = Math.PI / 2; body.position.z = .15; g.add(body);
+  [.025, .11, .2, .29].forEach(z => { const r = new T3.Mesh(new T3.TorusGeometry(.04, .009, 8, 24), teal); r.position.z = z; g.add(r); });
+  const nose = new T3.Mesh(new T3.CylinderGeometry(.03, .036, .03, 20), grey); nose.rotation.x = Math.PI / 2; nose.position.z = -.01; g.add(nose);
+  const grip = new T3.Mesh(new T3.BoxGeometry(.03, .09, .04), grey); grip.position.set(0, -.07, .17); grip.rotation.x = -.35; g.add(grip);
+  const trig = new T3.Mesh(new T3.BoxGeometry(.012, .03, .012), dark); trig.position.set(0, -.045, .12); g.add(trig);
+  const tail = new T3.Mesh(new T3.CylinderGeometry(.042, .042, .03, 20), dark); tail.rotation.x = Math.PI / 2; tail.position.z = .31; g.add(tail);
+  return g;
+}
 const gloveBlue = makeGlove('#3a6cf2'), gloveRed = makeGlove('#e2363d');
-gloveBlue.scale.setScalar(.72); gloveRed.scale.set(-.72, .72, .72);
-sceneH.add(gloveBlue, gloveRed);
+const launchBlue = makeLauncher(), launchRed = makeLauncher();
+[gloveBlue, launchBlue].forEach(o => o.scale.setScalar(.72));
+[gloveRed, launchRed].forEach(o => o.scale.set(-.72, .72, .72));
+sceneH.add(gloveBlue, gloveRed, launchBlue, launchRed);
 const cableGeo = new T3.CylinderGeometry(.006, .006, 1, 6); cableGeo.translate(0, .5, 0); cableGeo.rotateX(Math.PI / 2);
 const cableB = new T3.Mesh(cableGeo, hmat(0x151820)), cableR = new T3.Mesh(cableGeo, hmat(0x151820));
 sceneH.add(cableB, cableR);
@@ -2631,7 +2667,7 @@ function buildPickModel(e) {
   while (pickHolder.children.length) pickHolder.remove(pickHolder.children[0]);
   const fn = MODELS[e.type]; if (!fn) return;
   const g = new T3.Group();
-  if (e.type === 'grab') { const gl = makeGlove('#3a6cf2'); g.add(gl); }
+  if (e.type === 'grab') { g.add(makeGlove('#3a6cf2')); const l = makeLauncher(); l.position.y = -.05; g.add(l); }
   else fn(e, g);
   g.traverse(o => { if (o.isLight) o.intensity = 0; });
   const wrap = new T3.Group(); wrap.add(g); wrap.updateMatrixWorld(true);
@@ -2649,27 +2685,28 @@ function updateHands(dt, now) {
   const lit = Math.max(.25, Math.min(1, lightMul));
   hHemi.intensity = .55 * lit; hKey.intensity = .9 * lit;
   const bx = reduceMotion ? 0 : Math.cos(bobT / 2) * .012, by = reduceMotion ? 0 : Math.abs(Math.sin(bobT)) * .012 + Math.sin(now / 900) * .004;
-  const place = (glove, cable, isRed, sx) => {
-    glove.visible = show && (!isRed || S.has.red);
+  const place = (glove, launcher, cable, isRed, sx) => {
+    glove.visible = launcher.visible = show && (!isRed || S.has.red) && !cutOn;
     cable.visible = false;
     if (!glove.visible) return;
-    const base = new T3.Vector3(sx * .23 + bx * (isRed ? -1 : 1), -.24 - by, -.46);
+    const base = new T3.Vector3(sx * .21 + bx * (isRed ? -1 : 1), -.27 - by, -.44);
+    launcher.position.copy(base); launcher.rotation.set(-.1, sx * -.2, 0);
+    const home = base.clone().add(new T3.Vector3(sx * .015, .04, -.02));
     let e = 0;
     if (hand && hand.red === isRed) e = Math.sin(Math.PI * hand.t / hand.d);
     const tgt = new T3.Vector3(0, -.02, -1.5);
-    glove.position.copy(base).lerp(tgt, e * .9);
-    glove.rotation.set(-.25 + e * -.2, sx * -.25 * (1 - e), sx * -.15);
+    glove.position.copy(home).lerp(tgt, e * .9);
+    glove.rotation.set(-.15 - e * .2, sx * -.2 * (1 - e), 0);
     if (e > .02) {
       cable.visible = true;
-      const from = base.clone().add(new T3.Vector3(0, -.02, .25));
-      cable.position.copy(from); cable.lookAt(glove.position.clone().add(new T3.Vector3(0, 0, .2)));
-      cable.scale.set(1, 1, from.distanceTo(glove.position) - .05);
+      cable.position.copy(home); cable.lookAt(glove.position);
+      cable.scale.set(1, 1, Math.max(.01, home.distanceTo(glove.position)));
     }
     const glowOn = isRed && S.carry > 0;
     glove.userData.skin.emissive.setHex(glowOn ? 0x7a5a00 : 0x000000);
   };
-  place(gloveBlue, cableB, false, -1);
-  place(gloveRed, cableR, true, 1);
+  place(gloveBlue, launchBlue, cableB, false, -1);
+  place(gloveRed, launchRed, cableR, true, 1);
   hFill.intensity = S.carry > 0 ? .8 + Math.random() * .5 : 0;
   catBee.visible = S.catbee && S.phase === 'play' && scareT <= 0;
   if (catBee.visible) { catBee.position.set(-.2 + bx, -.12 - by, -.5); catBee.scale.setScalar(.6); catBee.rotation.set(.15, .5 + Math.sin(now / 700) * .15, 0); }
